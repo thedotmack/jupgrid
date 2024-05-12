@@ -3,11 +3,11 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import promptSync from 'prompt-sync';
 
-import { Wallet } from '@project-serum/anchor';
-import * as solanaWeb3 from '@solana/web3.js';
-
-import { initialize } from './jupgrid.js';
-import * as utils from './utils.js';
+import { Wallet } from "@project-serum/anchor";
+import * as solanaWeb3 from "@solana/web3.js";
+import { Keypair } from "@solana/web3.js";
+import { initialize } from "./jupgrid.js";
+import * as utils from "./utils.js";
 
 const prompt = promptSync({ sigint: true });
 
@@ -48,15 +48,18 @@ function envload() {
 				const decdflag = cryptr.decrypt(process.env.FLAG);
 				if (decdflag !== encflag) {
 					console.error(
-						"Invalid password. Please ensure you are using the correct password."
+						"\u{274C} Invalid password. Please ensure you are using the correct password.",
+						console.error("\u{274C} An error occurred:", error)
 					);
 					continue;
 				}
 				return [
-					new Wallet(
-						solanaWeb3.Keypair.fromSecretKey(
-							bs58.decode(cryptr.decrypt(process.env.PRIVATE_KEY))
-						)
+					Keypair.fromSecretKey(
+						new Uint8Array(
+							bs58.decode(
+								cryptr.decrypt(process.env.PRIVATE_KEY),
+							),
+						),
 					),
 					process.env.RPC_URL
 				];
@@ -64,6 +67,7 @@ function envload() {
 				console.error(
 					"Invalid password. Please ensure you are using the correct password."
 				);
+				console.error("\u{274C} An error occurred:", error);
 				continue;
 			}
 		} else {
