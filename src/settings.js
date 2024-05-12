@@ -1,7 +1,7 @@
-import bs58 from 'bs58';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import promptSync from 'prompt-sync';
+import bs58 from "bs58";
+import dotenv from "dotenv";
+import fs from "fs";
+import promptSync from "prompt-sync";
 
 import { Wallet } from "@project-serum/anchor";
 import * as solanaWeb3 from "@solana/web3.js";
@@ -19,22 +19,22 @@ function envload() {
 		if (!fs.existsSync(envFilePath)) {
 			fs.writeFileSync(envFilePath, defaultEnvContent, "utf8");
 			console.log(
-				".env file created. Please fill in your private information, and start JupGrid again."
+				"\u{2714} .env file created. Please fill in your private information, and start JupGrid again.",
 			);
 			process.exit(0);
 		}
-		console.log("Env Loaded Successfully.\n");
+		console.log("\u{2714} Env Loaded Successfully.\n");
 	} catch (error) {
 		console.error(
-			"An error occurred while checking or creating the .env file:",
-			error
+			"\u{274C} An error occurred while checking or creating the .env file:",
+			error,
 		);
 		process.exit(1);
 	}
 	dotenv.config();
 	if (!process.env.PRIVATE_KEY || !process.env.RPC_URL) {
 		console.error(
-			"Missing required environment variables in .env file. Please ensure PRIVATE_KEY and RPC_URL are set."
+			"\u{274C} Missing required environment variables in .env file. Please ensure PRIVATE_KEY and RPC_URL are set.",
 		);
 		process.exit(1);
 	}
@@ -42,7 +42,7 @@ function envload() {
 		if (process.env.FLAG) {
 			try {
 				const password = prompt.hide(
-					"Enter your password to decrypt your private key (input hidden): "
+					"\u{1F512} Enter your password to decrypt your private key (input hidden): ",
 				);
 				const cryptr = new utils.Encrypter(password);
 				const decdflag = cryptr.decrypt(process.env.FLAG);
@@ -61,18 +61,18 @@ function envload() {
 							),
 						),
 					),
-					process.env.RPC_URL
+					process.env.RPC_URL,
 				];
 			} catch (error) {
 				console.error(
-					"Invalid password. Please ensure you are using the correct password."
+					"\u{274C} Invalid password. Please ensure you are using the correct password.",
 				);
 				console.error("\u{274C} An error occurred:", error);
 				continue;
 			}
 		} else {
 			const pswd = prompt.hide(
-				"Enter a password to encrypt your private key with (input hidden): "
+				"\u{1F50F} Enter a password to encrypt your private key with (input hidden): ",
 			);
 			const cryptr = new utils.Encrypter(pswd);
 			const encryptedKey = cryptr.encrypt(process.env.PRIVATE_KEY, pswd);
@@ -80,10 +80,10 @@ function envload() {
 			fs.writeFileSync(
 				envFilePath,
 				`RPC_URL=${process.env.RPC_URL}\n//Do NOT touch these two - you risk breaking encryption!\nPRIVATE_KEY=${encryptedKey}\nFLAG=${encryptedFlag}`,
-				"utf8"
+				"utf8",
 			);
 			console.log(
-				"Encrypted private key and flag saved to .env file. Please restart JupGrid to continue."
+				"\u{1F512} Encrypted private key and flag saved to .env file. Please restart JupGrid to continue.",
 			);
 			process.exit(0);
 		}
@@ -106,6 +106,7 @@ function saveuserSettings(
 	monitorDelay,
 	stopLossUSD,
 	infinityTarget,
+	infinityMode,
 ) {
 	try {
 		fs.writeFileSync(
@@ -127,12 +128,13 @@ function saveuserSettings(
 					monitorDelay,
 					stopLossUSD,
 					infinityTarget,
+					infinityMode,
 				},
 				null,
-				4
-			)
+				4,
+			),
 		);
-		console.log("User data saved successfully.");
+		console.log("\u{2714} User data saved successfully.");
 	} catch (error) {
 		console.error("Error saving user data:", error);
 	}

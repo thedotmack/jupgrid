@@ -1,6 +1,8 @@
 ## Jupgrid: Decentralized Grid Trading Bot Version 0.5J Beta
 =======
 
+## PLEASE DO NOT RUN THIS VERSION. IT IS FOR TESTING ONLY.
+
 ![GitHub last commit](https://img.shields.io/github/last-commit/ARBProtocol/jupgrid) ![GitHub issues](https://img.shields.io/github/issues/ARBProtocol/jupgrid) ![GitHub number of milestones](https://img.shields.io/github/milestones/all/ARBProtocol/jupgrid) ![GitHub stars](https://img.shields.io/github/stars/ARBProtocol/jupgrid?style=social)
 [![Twitter Follow](https://img.shields.io/twitter/follow/arbprotocol?style=social)](https://twitter.com/arbprotocol)
 

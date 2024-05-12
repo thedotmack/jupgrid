@@ -12,12 +12,7 @@ import bs58 from 'bs58';
 
 
 
-import packageInfo from '../package.json' assert { type: 'json' };
-import {
-	envload,
-	loaduserSettings,
-	saveuserSettings
-} from './settings.js';
+import { envload, loaduserSettings, saveuserSettings } from "./settings.js";
 import {
 	delay,
 	downloadTokensList,
@@ -82,7 +77,7 @@ let {
 	tradeSize = null,
 	tradeSizeInLamports = null,
 	validSpread = null,
-	stopLossUSD=  null,
+	stopLossUSD = null,
 	infinityTarget = null,
 	loaded = false,
 	openOrders = [],
@@ -159,6 +154,7 @@ let {
 		monitorDelay: null,
 		stopLossUSD: null,
 		infinityTarget: null,
+		infinityMode: null,
 	},
 } = {};
 //#endregion
@@ -167,6 +163,7 @@ async function loadQuestion() {
 	try {
 		await downloadTokensList();
 		console.log("Updated Token List\n");
+		console.log(`Connected Wallet: ${displayAddress}\n`);
 
 		if (!fs.existsSync("userSettings.json")) {
 			console.log("No user data found. Starting with fresh inputs.");
@@ -181,7 +178,7 @@ async function loadQuestion() {
 						if (responseQ === "Y") {
 							try {
 								// Show user data
-								const userSettings = loaduserSettings();
+								const userSettings = loaduserSettings();								
 								console.log("User data loaded successfully.");
 								//Infinity Mode Check
 								if (userSettings.infinityMode) {
@@ -234,6 +231,7 @@ Rebalance Swap Slippage: ${userSettings.rebalanceSlippageBPS / 100}%`);
 												monitorDelay,
 												stopLossUSD,
 												infinityTarget,
+												infinityMode,
 											} = userSettings);
 											console.log("Settings applied successfully!");
 											initialize();
@@ -678,6 +676,7 @@ function generatePriceLayers(startPrice, spreadbps, totalLayers) {
     return localSortedLayers;
 }
 
+
 async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB) {
 
 	async function getSOLBalanceAndUSDC() {
@@ -788,7 +787,7 @@ function formatElapsedTime(startTime) {
 	minutes = String(minutes).padStart(2, "0");
 	seconds = String(seconds).padStart(2, "0");
 
-	console.log(`Run time: ${hours}:${minutes}:${seconds}`);
+	console.log(`\u{23F1}  Run time: ${hours}:${minutes}:${seconds}`);
 }
 
 async function infinityGrid() {
@@ -808,7 +807,7 @@ async function infinityGrid() {
 	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
 	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
 	let tokenBPrice = currUSDBalanceB / currBalanceB; // Current price of token B
-	let tokenAPrice = currUSDBalanceA / currBalanceA; // Current price of token A
+	//let tokenAPrice = currUSDBalanceA / currBalanceA; // Current price of token A
 
 	if (currUsdTotalBalance < stopLossUSD) {
 		//Emergency Stop Loss
@@ -822,6 +821,10 @@ async function infinityGrid() {
 	let newPriceBUp = tokenBPrice * (1 + spreadbps / 10000); // *1.01 1% increase
 	let newPriceBDown = tokenBPrice * (1 - spreadbps / 10000); // *0.99 1% decrease
 
+	let marketUpIn = (currBalanceB * newPriceBUp - infinityTarget) / newPriceBUp; // USD Output, then Div by price to get lamports
+	let marketUpOut = marketUpIn * newPriceBUp; //Lamports * Price to get USD Input
+	let marketUpCalc = marketUpOut / marketUpIn; //Calculated Market Price for extra checking
+
 	console.log(`Current Market Price: ${tokenBPrice.toFixed(5)}
 Infinity Target: ${infinityTarget}
 Current ${selectedTokenB} Balance: ${currBalanceB} (${currUSDBalanceB.toFixed(2)})
@@ -831,10 +834,10 @@ Amount of ${selectedTokenB} to send: ${marketUpIn.toFixed(5)}
 Amount of ${selectedTokenA} to receive: ${marketUpOut.toFixed(5)}
 Calculated Market Price: ${marketUpCalc.toFixed(5)}`);
 
-console.log(`\n${selectedTokenB} up 1%: ${newPriceBUp}`);
-console.log("Amount of B to send: ", marketUpIn);
-console.log("Amount of A to receive: ", marketUpOut);
-console.log("Calculated Market Price: ", marketUpCalc);
+	// Calculate the amount of tokenB to buy to maintain the target USD value
+	let marketDownOut = (infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown; // USD Output, then Div by price to get lamports
+	let marketDownIn = marketDownOut * newPriceBDown; //Lamports * Price to get USD Input
+	let marketDownCalc = marketDownIn / marketDownOut; //Calculated Market Price for extra checking
 
 	console.log(`\n${selectedTokenB} down ${spread}%: ${newPriceBDown.toFixed(5)}
 Amount of ${selectedTokenB} to recieve: ${marketDownOut.toFixed(5)}
@@ -969,7 +972,7 @@ async function updateUSDVal(mintAddress, balance, decimals) {
 		const usdBalance = response.data.outAmount / Math.pow(10, 6);
 		return usdBalance;
 	} catch (error) {
-		// Error is not critical. 
+		// Error is not critical.
 		// Reuse the previous balances and try another update again next cycle.
 	}
 }
@@ -977,6 +980,12 @@ async function updateUSDVal(mintAddress, balance, decimals) {
 async function updateMainDisplay() {
 	console.clear();
 	console.log(`Jupgrid v${version}`);
+	if (infinityMode) {
+		console.log(`\u{267E}  Infinity Mode`);
+	} else {
+		console.log(`\u{1F680} Classic Grid Mode`);
+	}
+	console.log(`\u{1F4B0} Wallet: ${displayAddress}`);
 	formatElapsedTime(startTime);
 	console.log(`-`);
 	if (infinityMode) {
@@ -985,7 +994,7 @@ async function updateMainDisplay() {
 	} else {
 	console.log(`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)} -\n\u{2195} Spread: ${spread}%`,
 	);
-	console.log(`-`);
+	}
 
 	try {
 		// Attempt to fetch the new USD values
@@ -1032,7 +1041,6 @@ Performance Delta: ${(percentageChange - ((newPrice - startPrice) / startPrice) 
 -
 Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))}
 Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))}`);
-}
 }
 
 async function recalculateLayers(layers) {
@@ -1723,7 +1731,6 @@ async function balanceCheck() {
 	tokenARebalanceValue = currentBalances.tokenARebalanceValue;
 	tokenBRebalanceValue = currentBalances.tokenBRebalanceValue;
 
-	
 	//Rebalancing allowed check
 	if ((rebalanceAllowed && (percentageOfA < rebalancePercentage || percentageOfB < rebalancePercentage)) || infinityMode) {
 		if (infinityMode) {
@@ -1735,11 +1742,13 @@ async function balanceCheck() {
 			if (currUSDBalanceB < targetUsdBalancePerToken) {
 				// Calculate how much more of TokenB we need to reach the target
 				let deficit = (targetUsdBalancePerToken - currUSDBalanceB) * Math.pow(10, selectedDecimalsA);
+
 				// Calculate how much of TokenA we need to sell to buy the deficit amount of TokenB
-				adjustmentA = -1 * deficit / tokenARebalanceValue;
+				adjustmentA = (-1 * deficit) / tokenARebalanceValue;
 			} else if (currUSDBalanceB > targetUsdBalancePerToken) {
 				// Calculate how much we have exceeded the target
 				let surplus = (currUSDBalanceB - targetUsdBalancePerToken) * Math.pow(10, selectedDecimalsB);
+
 				// Calculate how much of TokenB we need to sell to get rid of the surplus
 				adjustmentB = -1 * (surplus / tokenBRebalanceValue);
 			}
@@ -1747,8 +1756,8 @@ async function balanceCheck() {
 			console.log("Infinity Mode Enabled");
 		} else {
 			let targetUsdBalancePerToken = currUsdTotalBalance / 2;
-		adjustmentA = targetUsdBalancePerToken - currUSDBalanceA;
-		adjustmentB = targetUsdBalancePerToken - currUSDBalanceB;
+			adjustmentA = targetUsdBalancePerToken - currUSDBalanceA;
+			adjustmentB = targetUsdBalancePerToken - currUSDBalanceB;
 		}
 
 		if (adjustmentA < 0) {
