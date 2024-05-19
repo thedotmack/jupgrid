@@ -87,8 +87,6 @@ let {
 	startPrice = null,
 	spread = null,
 	spreadbps = null,
-	priorityFee = null,
-	validPriorityFee = false,
 	buyInput = null,
 	buyOutput = null,
 	sellInput = null,
@@ -147,7 +145,6 @@ let {
 		selectedTokenB: null,
 		tradeSize: null,
 		spread: null,
-		priorityFee: null,
 		rebalanceAllowed: null,
 		rebalancePercentage: null,
 		rebalanceSlippageBPS: null,
@@ -188,7 +185,6 @@ Infinity Target: ${userSettings.infinityTarget}
 Token A: ${userSettings.selectedTokenA}
 Token B: ${userSettings.selectedTokenB}
 Spread: ${userSettings.spread}%
-Priority Fee: ${userSettings.priorityFee}
 Stop Loss: ${userSettings.stopLossUSD}
 Monitoring delay: ${userSettings.monitorDelay}ms`,
 									);	
@@ -198,7 +194,6 @@ Monitoring delay: ${userSettings.monitorDelay}ms`,
 Token B: ${userSettings.selectedTokenB}
 Order Size (in ${userSettings.selectedTokenA}): ${userSettings.tradeSize}
 Spread: ${userSettings.spread}
-Priority Fee: ${userSettings.priorityFee}
 Stop Loss: ${userSettings.stopLossUSD}
 Monitoring delay: ${userSettings.monitorDelay}ms
 Rebalancing is ${userSettings.rebalanceAllowed ? "enabled" : "disabled"}`);
@@ -224,7 +219,6 @@ Rebalance Swap Slippage: ${userSettings.rebalanceSlippageBPS / 100}%`);
 												selectedDecimalsB,
 												tradeSize,
 												spread,
-												priorityFee,
 												rebalanceAllowed,
 												rebalancePercentage,
 												rebalanceSlippageBPS,
@@ -278,9 +272,6 @@ async function initialize() {
 	}
 	if (spread != null) {
 		validSpread = true;
-	}
-	if (priorityFee != null) {
-		validPriorityFee = true;
 	}
 	if (rebalanceAllowed != null) {
 		validRebalanceAllowed = true;
@@ -512,26 +503,6 @@ Token Decimals: ${token.decimals}`);
 		}
 	}
 
-	if (userSettings.priorityFee) {
-		priorityFee = !isNaN(parseFloat(userSettings.priorityFee));
-		if (!validPriorityFee) {
-			console.log("Invalid priority fee found in user data. Please re-enter.");
-			userSettings.priorityFee = null; // Reset spread percentage
-		} else validPriorityFee = true;
-	}
-	
-	// If spread percentage is not valid, prompt the user
-	while (!validPriorityFee) {
-		const priorityFeeInput = await questionAsync("What Priority Fee do you want to use? (Micro Lamports - 1000 = 0.000001000 SOL: ");
-		priorityFee = parseFloat(priorityFeeInput);
-		if (!isNaN(priorityFee)) {
-			userSettings.priorityFee = priorityFee;
-			validPriorityFee = true;
-		} else {
-			console.log("Invalid Priority Fee. Please enter a valid number.");
-		}
-	}
-
 	while (!validMonitorDelay) {
 		const monitorDelayQuestion = await questionAsync(`Enter the delay between price checks in milliseconds (minimum 5000ms): `);
 		const parsedMonitorDelay = parseInt(monitorDelayQuestion.trim());
@@ -546,15 +517,10 @@ Token Decimals: ${token.decimals}`);
 	spreadbps = spread * 100;
 	rl.close(); // Close the readline interface after question loops are done.
 	
-	saveuserSettings(selectedTokenA, selectedAddressA, selectedDecimalsA, selectedTokenB, selectedAddressB, selectedDecimalsB, tradeSize, spread, priorityFee, rebalanceAllowed, rebalancePercentage, rebalanceSlippageBPS, monitorDelay, stopLossUSD, infinityTarget, infinityMode);
+	saveuserSettings(selectedTokenA, selectedAddressA, selectedDecimalsA, selectedTokenB, selectedAddressB, selectedDecimalsB, tradeSize, spread, rebalanceAllowed, rebalancePercentage, rebalanceSlippageBPS, monitorDelay, stopLossUSD, infinityTarget, infinityMode);
 	//First Price check during init
-
-	if (infinityMode) {
-		console.clear();
-		console.log(`Starting JupGrid Infinity Mode
-Your Token Selection for A - Symbol: ${selectedTokenA}, Address: ${selectedAddressA}
-Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddressB}`);
-		tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
+	console.log("Getting Latest Price Data...");
+	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
 		const queryParams = {
 			inputMint: selectedAddressB,
 			outputMint: selectedAddressA,
@@ -563,22 +529,16 @@ Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddre
 		};
 		const response = await axios.get(quoteurl, { params: queryParams });
 		
-		newPrice = response.data.outAmount / Math.pow(10, selectedDecimalsA); 
-		startPrice = response.data.outAmount / Math.pow(10, selectedDecimalsA);
+		newPrice = response.data.outAmount;
+		startPrice = response.data.outAmount;
+	if (infinityMode) {
+		console.clear();
+		console.log(`Starting JupGrid Infinity Mode
+Your Token Selection for A - Symbol: ${selectedTokenA}, Address: ${selectedAddressA}
+Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddressB}`);
 		startInfinity();
 	} else {
 		try {
-			tradeSizeInLamports = tradeSize * Math.pow(10, selectedDecimalsA);
-			const queryParams = {
-				inputMint: selectedAddressA,
-				outputMint: selectedAddressB,
-				amount: tradeSizeInLamports,
-				slippageBps: 0,
-			};
-			const response = await axios.get(quoteurl, { params: queryParams });
-			newPrice = response.data.outAmount; 
-			startPrice = response.data.outAmount;
-
 			const layers = generatePriceLayers(startPrice, spreadbps, 500);
 			//Calc first price layers
 			buyInput = tradeSizeInLamports;
@@ -630,14 +590,16 @@ Total User Balance: $${initUsdTotalBalance.toFixed(2)}`);
 }
 
 async function startInfinity() {
-	//Balance check and rebalance to start
-	//await balanceCheck();
 	let initialBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
 	initBalanceA = initialBalances.balanceA;
 	initUsdBalanceA = initialBalances.usdBalanceA;
 	initBalanceB = initialBalances.balanceB;
 	initUsdBalanceB = initialBalances.usdBalanceB;
 	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
+	console.log(`Checking for existing orders to cancel...`);
+	await jitoController("cancel");
+	console.log(`Rebalancing your portfolio...`);
+	await jitoController("rebalance");
 	infinityGrid();
 }
 
@@ -675,7 +637,6 @@ function generatePriceLayers(startPrice, spreadbps, totalLayers) {
 	
     return localSortedLayers;
 }
-
 
 async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB) {
 
@@ -793,21 +754,23 @@ function formatElapsedTime(startTime) {
 async function infinityGrid() {
 
 	if (shutDown) return;
-	if (infinityInit) {
-		await jitoController("cancel");
-		await jitoController("rebalance");
-		infinityInit = false; //Disable rebalance function after 1st run
-	}
 
 	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
+	const queryParams = {
+		inputMint: selectedAddressB,
+		outputMint: selectedAddressA,
+		amount: tradeSizeInLamports,
+		slippageBps: 0,
+	};
+	const response = await axios.get(quoteurl, { params: queryParams });
+	let priceResponse = response.data.outAmount / Math.pow(10, selectedDecimalsA);
 
 	currBalanceA = currentBalances.balanceA; // Current balance of token A
 	currBalanceB = currentBalances.balanceB; // Current balance of token B
 	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
 	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
 	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
-	let tokenBPrice = currUSDBalanceB / currBalanceB; // Current price of token B
-	//let tokenAPrice = currUSDBalanceA / currBalanceA; // Current price of token A
 
 	if (currUsdTotalBalance < stopLossUSD) {
 		//Emergency Stop Loss
@@ -818,14 +781,14 @@ async function infinityGrid() {
 		process.kill(process.pid, 'SIGINT');
 	}
 	// Calculate the new prices of tokenB when it's up 1% and down 1%
-	let newPriceBUp = tokenBPrice * (1 + spreadbps / 10000); // *1.01 1% increase
-	let newPriceBDown = tokenBPrice * (1 - spreadbps / 10000); // *0.99 1% decrease
+	let newPriceBUp = priceResponse * (1 + spreadbps / 10000); // *1.01 1% increase
+	let newPriceBDown = priceResponse * (1 - spreadbps / 10000); // *0.99 1% decrease
 
 	let marketUpIn = (currBalanceB * newPriceBUp - infinityTarget) / newPriceBUp; // USD Output, then Div by price to get lamports
 	let marketUpOut = marketUpIn * newPriceBUp; //Lamports * Price to get USD Input
 	let marketUpCalc = marketUpOut / marketUpIn; //Calculated Market Price for extra checking
 
-	console.log(`Current Market Price: ${tokenBPrice.toFixed(5)}
+	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
 Infinity Target: ${infinityTarget}
 Current ${selectedTokenB} Balance: ${currBalanceB} (${currUSDBalanceB.toFixed(2)})
 
@@ -849,6 +812,8 @@ Calculated Market Price: ${marketDownCalc.toFixed(5)}`);
 	infinityBuyOutput = Math.floor(marketDownOut * Math.pow(10, selectedDecimalsB))
 	infinitySellInput = Math.floor(marketUpIn * Math.pow(10, selectedDecimalsB))
 	infinitySellOutput = Math.floor(marketUpOut * Math.pow(10, selectedDecimalsA))
+	let profitCalc = infinitySellInput - infinityBuyOutput;
+	console.log(`\nSuggested Profit per Trade: ${profitCalc} ${selectedTokenB}`);
 
 	await jitoController("infinity");
 	console.log("Pause for 5 seconds to allow orders to finalize on blockchain.",await delay(5000));
@@ -1004,7 +969,17 @@ async function updateMainDisplay() {
 		currUSDBalanceA = tempUSDBalanceA ?? currUSDBalanceA; // Fallback to current value if undefined
 		currUSDBalanceB = tempUSDBalanceB ?? currUSDBalanceB; // Fallback to current value if undefined
 		currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-
+		if (infinityMode) {
+			tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
+			const queryParams = {
+				inputMint: selectedAddressB,
+				outputMint: selectedAddressA,
+				amount: tradeSizeInLamports,
+				slippageBps: 0,
+			};
+			const response = await axios.get(quoteurl, { params: queryParams });
+			newPrice = response.data.outAmount;
+		} else {
 		const queryParams = {
 			inputMint: selectedAddressA,
 			outputMint: selectedAddressB,
@@ -1013,6 +988,7 @@ async function updateMainDisplay() {
 		};
 		const response = await axios.get(quoteurl, { params: queryParams });
 		newPrice = response.data.outAmount;
+		}
 	} catch (error) {
 		//Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
@@ -1236,6 +1212,8 @@ async function jitoController(task) {
 			break;
 		default:
 			//unintended code
+			console.log("Unknown Error state. Exiting...");
+			process.exit(0);
 			break;
     }
 	jitoRetry = 1;
@@ -1266,16 +1244,18 @@ async function jitoController(task) {
 				console.log("Retrying Infinity Orders...");
 				jitoRetry++;
 				result = await jitoSetInfinity(task);
+				break;
 			case 'rebalanceFail':
 				console.log("Retrying Rebalance Orders...");
 				jitoRetry++;
 				result = await jitoRebalance(task);
+				break;
             case 'unknown':
                 console.log("Unknown state, incrementing retry counter...");
                 jitoRetry++;
                 break;
 			default:
-				console.log("Default/Error state. Exiting...");
+				console.log("Unknown Error state. Exiting...");
 				process.exit(0);
         }
         console.log("End Jito Controller");
@@ -1564,7 +1544,7 @@ async function sendJitoBundle(task, bundletoSend) {
 		case 'infinity':
 			if (checkArray.length !== 2) {
 				console.log("Placing Infinity Orders Failed, Retrying...");
-				return 'infinityFail';
+				return 'infinityFail', task;
 			} else {
 				console.log("Infinity Orders Placed Successfully");
 				return 'succeed';
