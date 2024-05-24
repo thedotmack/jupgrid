@@ -1400,6 +1400,10 @@ async function jitoSetInfinity(task) {
 
 async function jitoRebalance(task) {
 	let transaction1 = await balanceCheck();
+	if (transaction1 === "skip") {
+		console.log("Skipping Rebalance...");
+		return "succeed";
+	}
 	let result = await handleJitoBundle(task, transaction1);
 	return result;
 }
@@ -1451,7 +1455,11 @@ async function handleJitoBundle(task, ...transactions) {
 
 async function sendJitoBundle(task, bundletoSend) {
 	const encodedBundle = bundletoSend.map(encodeTransactionToBase58);
-	
+
+	let { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+	console.log(`PreJitoA: ${preJitoA}`);
+	console.log(`PreJitoB: ${preJitoB}`);
+
     const data = {
         jsonrpc: '2.0',
         id: 1,
@@ -1489,32 +1497,37 @@ async function sendJitoBundle(task, bundletoSend) {
 	console.log(`\nResult ID: ${url}`);
 	//spinner.stop();
 	console.log("Checking for 30 seconds...");
-	let jitoChecks = 0;
+	let jitoChecks = 1;
 	let maxChecks = 30;
+	let spinner;
 	let bundleLanded = false;
 	while (jitoChecks <= maxChecks) {
-		//console.clear();
-		console.log("Checking Jito Bundle Status...");
-		console.log("Task: ", task);
+		spinner = ora(`Checking Jito Bundle Status... ${jitoChecks}/${maxChecks}`).start();
+		console.log("\nTask: ",task);
 		try {
-			console.log('\nAttempt', jitoChecks);
-			jitoChecks++;
-			console.log('Calling getBundleStatus with:', result);
-			let bundleResult = await getBundleStatus(result);
-			console.log('getBundleStatus returned:', bundleResult);
-			bundleLanded = bundleResult.value.length > 0;
-			if (bundleLanded) {
-				console.log("Bundle landed, waiting 30 seconds for orders to finalize...")
+			let { balanceA: postJitoA, balanceB: postJitoB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+			if (postJitoA !== preJitoA && postJitoB !== preJitoB) {
+				bundleLanded = true;
+				spinner.stop();
+				console.log("\nBundle Landed, waiting 30 seconds for orders to finalize...");
+				spinner = ora("").start();
 				await delay(30000);
+				spinner.stop();
 				jitoChecks = 31;
 				break;
 			}
+			jitoChecks++;
 			await delay(1000);
 		} catch (error) {
-			console.error('Error in getBundleStatus:', error);
+			console.error('Error in balance check:', error);
 		}
+		spinner.stop();
 	}
 	
+	if (spinner) {
+		spinner.stop();
+	}
+
 	await checkOpenOrders();
     switch (task) {
 		case 'cancel':
@@ -1544,7 +1557,7 @@ async function sendJitoBundle(task, bundletoSend) {
 		case 'infinity':
 			if (checkArray.length !== 2) {
 				console.log("Placing Infinity Orders Failed, Retrying...");
-				return 'infinityFail', task;
+				return 'infinityFail';
 			} else {
 				console.log("Infinity Orders Placed Successfully");
 				return 'succeed';
@@ -1693,6 +1706,7 @@ async function cancelOrder(target) {
 async function balanceCheck() {
 	//Update balances and profits
 	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+	
 	console.log("Balances Updated");
 	// Calculate profit
 	profitA = currentBalances.usdBalanceA - initUsdBalanceA;
@@ -1719,6 +1733,8 @@ async function balanceCheck() {
 				process.exit(0); // Exit program
 			}
 			let targetUsdBalancePerToken = infinityTarget;
+			let percentageDifference = Math.abs((currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken);
+			if (percentageDifference > 0.01) {
 			if (currUSDBalanceB < targetUsdBalancePerToken) {
 				// Calculate how much more of TokenB we need to reach the target
 				let deficit = (targetUsdBalancePerToken - currUSDBalanceB) * Math.pow(10, selectedDecimalsA);
@@ -1731,6 +1747,10 @@ async function balanceCheck() {
 
 				// Calculate how much of TokenB we need to sell to get rid of the surplus
 				adjustmentB = -1 * (surplus / tokenBRebalanceValue);
+			}
+			} else {
+				console.log("Within 1% of target, skipping rebalance")
+				return "skip"
 			}
 			rebalanceSlippageBPS = 200;
 			console.log("Infinity Mode Enabled");
