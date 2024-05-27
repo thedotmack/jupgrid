@@ -73,8 +73,6 @@ let {
 	selectedAddressB = null,
 	selectedDecimalsA = null,
 	selectedDecimalsB = null,
-	validTradeSize = false,
-	tradeSize = null,
 	tradeSizeInLamports = null,
 	validSpread = null,
 	stopLossUSD = null,
@@ -87,12 +85,6 @@ let {
 	startPrice = null,
 	spread = null,
 	spreadbps = null,
-	buyInput = null,
-	buyOutput = null,
-	sellInput = null,
-	sellOutput = null,
-	buyOutput2 = null,
-	sellInput2 = null,
 	initBalanceA = 0,
 	initUsdBalanceA = 0,
 	initBalanceB = 0,
@@ -106,40 +98,24 @@ let {
 	tokenRebalanceValue = null,
 	tokenARebalanceValue = 0,
 	tokenBRebalanceValue = 0,
-	rebalanceAllowed = null,
-	validRebalanceAllowed = false,
-	rebalanceSlippageBPS = 25,
-	validRebalanceSlippage = false,
-	rebalancePercentage = 0,
-	validRebalancePercentage = false,
 	validStopLossUSD = false,
 	validInfinityTarget = false,
 	startTime = new Date(),
-	profitA = null,
-	profitB = null,
 	monitorDelay = null,
-	buyKeyHigh = null,
-	buyKeyLow = null,
-	sellKeyLow = null,
-	sellKeyHigh = null,
-	lastFilledOrder = null, // 'buy' or 'sell'
-	sortedLayers,
-	infinityMode = false,
 	adjustmentA = 0,
 	adjustmentB = 0,
-	infinityInit = true,
 	stopLoss = false,
-	renewOrders = false,
 	transactionArray = [],
 	jitoRetry = 0,
-	orderToCancel = [],
-	newLayer = null,
-	newLayer2 = null,
-	filledOrder,
 	infinityBuyInput,
 	infinityBuyOutput,
 	infinitySellInput,
 	infinitySellOutput,
+	infinityBuyInputLamports,
+	infinityBuyOutputLamports,
+	infinitySellInputLamports,
+	infinitySellOutputLamports,
+	counter = 0,
 	userSettings = {
 		selectedTokenA: null,
 		selectedTokenB: null,
@@ -177,31 +153,15 @@ async function loadQuestion() {
 								// Show user data
 								const userSettings = loaduserSettings();								
 								console.log("User data loaded successfully.");
-								//Infinity Mode Check
-								if (userSettings.infinityMode) {
 									console.log(
 										`Infinity Mode Enabled.
-Infinity Target: ${userSettings.infinityTarget}
 Token A: ${userSettings.selectedTokenA}
 Token B: ${userSettings.selectedTokenB}
+Infinity Target: ${userSettings.infinityTarget}
 Spread: ${userSettings.spread}%
 Stop Loss: ${userSettings.stopLossUSD}
 Monitoring delay: ${userSettings.monitorDelay}ms`,
 									);	
-								} else {
-									console.log(`Classic Grid Mode Enabled`)
-								console.log(`Token A: ${userSettings.selectedTokenA}
-Token B: ${userSettings.selectedTokenB}
-Order Size (in ${userSettings.selectedTokenA}): ${userSettings.tradeSize}
-Spread: ${userSettings.spread}
-Stop Loss: ${userSettings.stopLossUSD}
-Monitoring delay: ${userSettings.monitorDelay}ms
-Rebalancing is ${userSettings.rebalanceAllowed ? "enabled" : "disabled"}`);
-								if (userSettings.rebalanceAllowed) {
-									console.log(`Rebalance Threshold: ${userSettings.rebalancePercentage}%
-Rebalance Swap Slippage: ${userSettings.rebalanceSlippageBPS / 100}%`);
-								}
-							}
 								// Prompt for confirmation to use these settings
 								rl.question(
 									"Proceed with these settings? (Y/N): ",
@@ -217,15 +177,10 @@ Rebalance Swap Slippage: ${userSettings.rebalanceSlippageBPS / 100}%`);
 												selectedTokenB,
 												selectedAddressB,
 												selectedDecimalsB,
-												tradeSize,
 												spread,
-												rebalanceAllowed,
-												rebalancePercentage,
-												rebalanceSlippageBPS,
 												monitorDelay,
 												stopLossUSD,
 												infinityTarget,
-												infinityMode,
 											} = userSettings);
 											console.log("Settings applied successfully!");
 											initialize();
@@ -267,20 +222,8 @@ async function initialize() {
 	if (selectedTokenB != null) {
 		validTokenB = true;
 	}
-	if (tradeSize != null) {
-		validTradeSize = true;
-	}
 	if (spread != null) {
 		validSpread = true;
-	}
-	if (rebalanceAllowed != null) {
-		validRebalanceAllowed = true;
-	}
-	if (rebalancePercentage != null && rebalancePercentage > 0 && rebalancePercentage <= 10000) {
-		validRebalancePercentage = true;
-	}
-	if (rebalanceSlippageBPS != null && rebalanceSlippageBPS >= 0.1 && rebalanceSlippageBPS <= 100) {
-		validRebalanceSlippage = true;
 	}
 	let validMonitorDelay = false;
 	if (monitorDelay >= 5000) {
@@ -363,52 +306,16 @@ Token Decimals: ${token.decimals}`);
 		}
 	}
 
-	if (!infinityMode){
-		const infinityModeInput = await questionAsync(`Would you like Infinity Mode? (Y/N): `);
-		infinityMode = infinityModeInput.toLowerCase() === "y";
-	}
-	if (infinityMode) {
-		if (userSettings.infinityTarget) {
-			validInfinityTarget = !isNaN(parseFloat(userSettings.infinityTarget));
-			if (!validInfinityTarget) {
-				console.log("Invalid infinity target value found in user data. Please re-enter.");
-				userSettings.infinityTarget = null; // Reset infinity target value
-			} else validInfinityTarget = true;
-		}
-	
-		// If infinity target value is not valid, prompt the user
-		while (!validInfinityTarget) {
-			const infinityTargetInput = await questionAsync(`Please Enter the Infinity Target Value: `);
-			infinityTarget = Math.floor(parseFloat(infinityTargetInput));
-			if (!isNaN(infinityTarget) && Number.isInteger(infinityTarget) && infinityTarget > userSettings.stopLossUSD
-			) {
-				userSettings.infinityTarget = infinityTarget;
-				validInfinityTarget = true;
-			} else {
-				console.log("Invalid infinity target value. Please enter a valid integer that is larger than the stop loss value.");
-			}
-		}
-	}
-
-	// Check if trade size is valid
-	if (userSettings.tradeSize) {
-		validTradeSize = !isNaN(parseFloat(userSettings.tradeSize));
-		if (!validTradeSize) {
-			console.log("Invalid trade size found in user data. Please re-enter.");
-			userSettings.tradeSize = null; // Reset trade size
-		} else validTradeSize = true;
-	}
-
-	// If trade size is not valid, prompt the user
-	while (!validTradeSize && !infinityMode) {
-		const tradeSizeInput = await questionAsync(`Please Enter the Trade Size: `);
-		tradeSize = parseFloat(tradeSizeInput);
-		if (!isNaN(tradeSize)) {
-			userSettings.tradeSize = tradeSize;
-			//userSettings.tradeSizeInLamports = tradeSize * Math.pow(10, selectedDecimalsA);
-			validTradeSize = true;
+	// If infinity target value is not valid, prompt the user
+	while (!validInfinityTarget) {
+		const infinityTargetInput = await questionAsync(`Please Enter the Infinity Target Value: `);
+		infinityTarget = Math.floor(parseFloat(infinityTargetInput));
+		if (!isNaN(infinityTarget) && Number.isInteger(infinityTarget) && infinityTarget > userSettings.stopLossUSD
+		) {
+			userSettings.infinityTarget = infinityTarget;
+			validInfinityTarget = true;
 		} else {
-			console.log("Invalid trade size. Please enter a valid number.");
+			console.log("Invalid infinity target value. Please enter a valid integer that is larger than the stop loss value.");
 		}
 	}
 
@@ -431,55 +338,6 @@ Token Decimals: ${token.decimals}`);
 			validSpread = true;
 		} else {
 			console.log("Invalid spread percentage. Please enter a valid number (No % Symbol).");
-		}
-	}
-
-	while (rebalanceAllowed === null  && !infinityMode) {
-		const rebalanceQuestion = await questionAsync("Do you want to allow rebalancing of Tokens (Currently Experimental)? (Y/N): ");
-	
-		if (rebalanceQuestion.trim().toUpperCase() === "Y") {
-			rebalanceAllowed = true;
-	
-			const percentageQuestion = await questionAsync("At what balance percentage do you want to rebalance your lower balance token? (Enter a number between 1 and 100): ");
-			const parsedPercentage = parseFloat(percentageQuestion.trim());
-			if (!isNaN(parsedPercentage) &&	parsedPercentage > 0 &&	parsedPercentage <= 100) {
-				rebalancePercentage = parsedPercentage;
-			} else {
-				console.log("Invalid percentage. Please enter a number between 1 and 100.");
-				continue; // Ask the rebalance percentage question again
-			}
-	
-			// Loop for maximum allowed slippage question until a valid answer is given or default is accepted
-			let isValidSlippage = false;
-			while (!isValidSlippage) {
-				const slippageQuestion = await questionAsync(`What is the maximum allowed slippage for the rebalance transaction? (Enter a number between 0.1 and 100, representing percentage, default 0.3%): `);
-	
-				let parsedSlippage;
-				if (slippageQuestion.trim() === "") {
-					// User accepted the default value
-					parsedSlippage = 0.3;
-					isValidSlippage = true;
-				} else {
-					// User entered a value, attempt to parse it
-					parsedSlippage = parseFloat(slippageQuestion.trim());
-					if (!isNaN(parsedSlippage) && parsedSlippage >= 0.1 &&	parsedSlippage <= 100) {
-						// Valid slippage value entered
-						isValidSlippage = true;
-					} else {
-						console.log("Invalid slippage value. Please enter a number between 0.1 and 100, or press Enter to accept the default value.");
-					}
-				}
-	
-				if (isValidSlippage) {
-					rebalanceSlippageBPS = parsedSlippage * 100;
-				}
-			}
-		} else if (rebalanceQuestion.trim().toUpperCase() === "N") {
-			rebalanceAllowed = false;
-			break; // Exit the loop if rebalancing is not allowed
-		} else {
-			console.log("Invalid input. Please enter 'Y' for Yes or 'N' for No.");
-			// Loop will continue asking the rebalance permission question
 		}
 	}
 
@@ -517,7 +375,7 @@ Token Decimals: ${token.decimals}`);
 	spreadbps = spread * 100;
 	rl.close(); // Close the readline interface after question loops are done.
 	
-	saveuserSettings(selectedTokenA, selectedAddressA, selectedDecimalsA, selectedTokenB, selectedAddressB, selectedDecimalsB, tradeSize, spread, rebalanceAllowed, rebalancePercentage, rebalanceSlippageBPS, monitorDelay, stopLossUSD, infinityTarget, infinityMode);
+	saveuserSettings(selectedTokenA, selectedAddressA, selectedDecimalsA, selectedTokenB, selectedAddressB, selectedDecimalsB, spread, monitorDelay, stopLossUSD, infinityTarget);
 	//First Price check during init
 	console.log("Getting Latest Price Data...");
 	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
@@ -531,111 +389,30 @@ Token Decimals: ${token.decimals}`);
 		
 		newPrice = response.data.outAmount;
 		startPrice = response.data.outAmount;
-	if (infinityMode) {
+
 		console.clear();
 		console.log(`Starting JupGrid Infinity Mode
 Your Token Selection for A - Symbol: ${selectedTokenA}, Address: ${selectedAddressA}
 Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddressB}`);
 		startInfinity();
-	} else {
-		try {
-			const layers = generatePriceLayers(startPrice, spreadbps, 500);
-			//Calc first price layers
-			buyInput = tradeSizeInLamports;
-			sellInput2 = layers[2];
-			sellInput = layers[1];
-			buyOutput = layers[-1];
-			buyOutput2 = layers[-2];
-			//Get Lamports for Sell Output
-			sellOutput = tradeSizeInLamports;
-			placingBulkOrders = true;
-			//console.clear();
-			console.log(`\n\u{1F680} Starting Jupgrid! Version ${version}`);
-			startGrid();
-			
-		} catch (error) {
-			console.error(`Error: Connection or Token Data Error
-Error:`, error);
-			return null; // Return null on error
-		}
-	}
 }
 
 if (loaded === false) {
 	loadQuestion();
 }
 
-async function startGrid() {
-	let initialBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	initBalanceA = initialBalances.balanceA;
-	initUsdBalanceA = initialBalances.usdBalanceA;
-	initBalanceB = initialBalances.balanceB;
-	initUsdBalanceB = initialBalances.usdBalanceB;
-	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
-
-	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	currBalanceA = currentBalances.balanceA;
-	currBalanceB = currentBalances.balanceB;
-	currUSDBalanceA = currentBalances.usdBalanceA;
-	currUSDBalanceB = currentBalances.usdBalanceB;
-	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB;
-
-	console.log(
-		`${chalk.cyan(selectedTokenA)} Balance: ${chalk.cyan(initBalanceA)}, worth $${chalk.cyan(initUsdBalanceA.toFixed(2))}
-${chalk.magenta(selectedTokenB)} Balance: ${chalk.magenta(initBalanceB)}, worth $${chalk.magenta(initUsdBalanceB.toFixed(2))}
-Total User Balance: $${initUsdTotalBalance.toFixed(2)}`);
-	await jitoController("cancel");
-	await jitoController("bulk");
-	monitorPrice();
-}
-
 async function startInfinity() {
-	let initialBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	initBalanceA = initialBalances.balanceA;
-	initUsdBalanceA = initialBalances.usdBalanceA;
-	initBalanceB = initialBalances.balanceB;
-	initUsdBalanceB = initialBalances.usdBalanceB;
-	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
 	console.log(`Checking for existing orders to cancel...`);
 	await jitoController("cancel");
+	let initialBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+	initBalanceA = initialBalances.balanceA;
+	initUsdBalanceA = initialBalances.usdBalanceA;
+	initBalanceB = initialBalances.balanceB;
+	initUsdBalanceB = initialBalances.usdBalanceB;
+	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
 	console.log(`Rebalancing your portfolio...`);
 	await jitoController("rebalance");
 	infinityGrid();
-}
-
-function generatePriceLayers(startPrice, spreadbps, totalLayers) {
-    const layers = {};
-    const spreadFactor = 1 + spreadbps / 10000; // Convert spreadbps to a multiplicative factor
-
-    for (let i = 1; i <= totalLayers; i++) {
-        const upperLayerPrice = Math.round(startPrice / Math.pow(spreadFactor, i));
-        const lowerLayerPrice = Math.round(startPrice * Math.pow(spreadFactor, i));
-
-        // Only add the layer if the price is greater than zero, is a whole number, and is less than Number.MAX_SAFE_INTEGER
-        if (upperLayerPrice > 0 && Number.isInteger(upperLayerPrice) && upperLayerPrice < Number.MAX_SAFE_INTEGER) {
-            layers[i] = upperLayerPrice;
-        }
-        if (lowerLayerPrice > 0 && Number.isInteger(lowerLayerPrice) && lowerLayerPrice < Number.MAX_SAFE_INTEGER) {
-            layers[-i] = lowerLayerPrice;
-        }
-    }
-    layers[0] = Number(newPrice);
-
-    // Convert the layers object to an array of [key, value] pairs
-    const layersArray = Object.entries(layers);
-
-    // Sort the array in descending order by key (layer number)
-    layersArray.sort((a, b) => Number(b[0]) - Number(a[0]));
-
-    // Convert the sorted array back to an object
-    const localSortedLayers = Object.fromEntries(layersArray);
-
-    fs.writeFileSync("userPriceLayers.json",JSON.stringify(localSortedLayers, null, 2),"utf8");
-
-    // Assign localSortedLayers to the global variable
-    sortedLayers = localSortedLayers;
-	
-    return localSortedLayers;
 }
 
 async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB) {
@@ -751,10 +528,11 @@ function formatElapsedTime(startTime) {
 	console.log(`\u{23F1}  Run time: ${hours}:${minutes}:${seconds}`);
 }
 
+/*
 async function infinityGrid() {
 
 	if (shutDown) return;
-
+	await jitoController("cancel");
 	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
 	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
 	const queryParams = {
@@ -784,6 +562,15 @@ async function infinityGrid() {
 	let newPriceBUp = priceResponse * (1 + spreadbps / 10000); // *1.01 1% increase
 	let newPriceBDown = priceResponse * (1 - spreadbps / 10000); // *0.99 1% decrease
 
+	let newBalanceUp = currBalanceB * newPriceBUp;
+	let newBalanceDown = currBalanceB * newPriceBDown;
+
+	let balanceDifferenceUp = infinityTarget - newBalanceUp;
+	let balanceDifferenceDown = infinityTarget - newBalanceDown;
+
+	let amountToTradeUp = balanceDifferenceUp / newPriceBUp;
+	let amountToTradeDown = balanceDifferenceDown / newPriceBDown;
+
 	let marketUpIn = (currBalanceB * newPriceBUp - infinityTarget) / newPriceBUp; // USD Output, then Div by price to get lamports
 	let marketUpOut = marketUpIn * newPriceBUp; //Lamports * Price to get USD Input
 	let marketUpCalc = marketUpOut / marketUpIn; //Calculated Market Price for extra checking
@@ -812,22 +599,95 @@ Calculated Market Price: ${marketDownCalc.toFixed(5)}`);
 	infinityBuyOutput = Math.floor(marketDownOut * Math.pow(10, selectedDecimalsB))
 	infinitySellInput = Math.floor(marketUpIn * Math.pow(10, selectedDecimalsB))
 	infinitySellOutput = Math.floor(marketUpOut * Math.pow(10, selectedDecimalsA))
-	let profitCalc = infinitySellInput - infinityBuyOutput;
-	console.log(`\nSuggested Profit per Trade: ${profitCalc} ${selectedTokenB}`);
 
+	let profitCalc = infinitySellInput - infinityBuyOutput / Math.pow(10, selectedDecimalsB);
+	console.log(`\nSuggested Profit per Trade: ${profitCalc} ${selectedTokenB}`);
+	counter++
 	await jitoController("infinity");
 	console.log("Pause for 5 seconds to allow orders to finalize on blockchain.",await delay(5000));
-	monitorPrice()
+	monitor()
+}
+*/
+async function infinityGrid() {
+    if (shutDown) return;
+    await jitoController("cancel");
+    let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+    tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
+    const queryParams = {
+        inputMint: selectedAddressB,
+        outputMint: selectedAddressA,
+        amount: tradeSizeInLamports,
+        slippageBps: 0,
+    };
+    const response = await axios.get(quoteurl, { params: queryParams });
+    let priceResponse = response.data.outAmount / Math.pow(10, selectedDecimalsA);
+
+    currBalanceA = currentBalances.balanceA; // Current balance of token A
+    currBalanceB = currentBalances.balanceB; // Current balance of token B
+    currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
+    currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
+    currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
+
+    if (currUsdTotalBalance < stopLossUSD) {
+        //Emergency Stop Loss
+        //console.clear();
+        console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
+        stopLoss = true;
+        cancelOrder();
+        process.kill(process.pid, 'SIGINT');
+    }
+    // Calculate the new prices of tokenB when it's up 1% and down 1%
+    let newPriceBUp = priceResponse * (1 + spreadbps / 10000);
+    let newPriceBDown = priceResponse * (1 - spreadbps / 10000);
+
+	// Calculate the amount of tokenB to sell to maintain the target USD value
+	let infinitySellInput = Math.abs((infinityTarget - currBalanceB * newPriceBUp) / newPriceBUp); // USD Output, then Div by price to get lamports
+	let infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); //Lamports * Price to get USD Input
+
+	// Convert to lamports
+	infinitySellInputLamports = Math.floor(infinitySellInput * Math.pow(10, selectedDecimalsB));
+	infinitySellOutputLamports = Math.floor(infinitySellOutput * Math.pow(10, selectedDecimalsA));
+
+	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
+	Infinity Target: ${infinityTarget}
+	Current ${selectedTokenB} Balance: ${currBalanceB} (${currUSDBalanceB.toFixed(2)})
+
+	${selectedTokenB} up ${spread}%: ${newPriceBUp.toFixed(5)}
+	Amount of ${selectedTokenB} to send: ${infinitySellInput.toFixed(5)} (${infinitySellInputLamports} lamports)
+	Amount of ${selectedTokenA} to receive: ${infinitySellOutput.toFixed(5)} (${infinitySellOutputLamports} lamports)`);
+
+	// Calculate the amount of tokenB to buy to maintain the target USD value
+	let infinityBuyOutput = Math.abs((infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown); // USD Output, then Div by price to get lamports
+	let infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); //Lamports * Price to get USD Input
+
+	// Convert to lamports and floor the values
+	infinityBuyOutputLamports = Math.floor(infinityBuyOutput * Math.pow(10, selectedDecimalsB));
+	infinityBuyInputLamports = Math.floor(infinityBuyInput * Math.pow(10, selectedDecimalsA));
+
+	console.log(`\n${selectedTokenB} down ${spread}%: ${newPriceBDown.toFixed(5)}
+	Amount of ${selectedTokenB} to send: ${infinityBuyOutput.toFixed(5)} (${infinityBuyOutputLamports} lamports)
+	Amount of ${selectedTokenA} to receive: ${infinityBuyInput.toFixed(5)} (${infinityBuyInputLamports} lamports)`);
+
+	console.log(infinityBuyInputLamports)
+	console.log(infinityBuyOutputLamports)
+	console.log(infinitySellInputLamports)
+	console.log(infinitySellOutputLamports)
+
+	counter++
+	await jitoController("infinity");
+	console.log("Pause for 5 seconds to allow orders to finalize on blockchain.",await delay(5000));
+	monitor()
 }
 
-async function monitorPrice(maxRetries = 5) {
+async function monitor() {
     if (shutDown) return;
+	let maxRetries = 5;
     let retries = 0;
     await updateMainDisplay();
     while (retries < maxRetries) {
         try {
             await checkOpenOrders();
-            await handleOrders(checkArray, sortedLayers);
+            await handleOrders(checkArray);
             break; // Break the loop if we've successfully handled the price monitoring
         } catch (error) {
             await handleRetry(error, retries, maxRetries);
@@ -835,79 +695,14 @@ async function monitorPrice(maxRetries = 5) {
     }
 }
 
-async function handleOrders(checkArray, sortedLayers) {
-
-	if (infinityMode) {
+async function handleOrders(checkArray) {
 		if (checkArray.length !== 2) {
-			await jitoController("infinity");
-			await delay(monitorDelay);
-			await monitorPrice();
+			infinityGrid();
 		} else {
 			console.log("2 open orders. Waiting for change.");
 			await delay(monitorDelay);
-			await monitorPrice();
+			await monitor();
 		}
-	} else {
-		if (checkArray.length === 0) {
-			await handleNoOrders();
-		} else if (checkArray.length === 3) {
-			// Store the name of the filled order in a variable
-			await handleMissingOrders(checkArray, sortedLayers);
-		} else if (checkArray.length > 4) {
-			await handleExcessiveOrders(checkArray, sortedLayers);
-		} else if (checkArray.length != 0 && checkArray.length != 3 && checkArray.length != 4) {
-			//Full Reset, unknown state
-			await jitoController("cancel");
-			await jitoController("bulk");
-		} else {
-			console.log("4 open orders. Waiting for change.");
-			await delay(monitorDelay);
-			monitorPrice();
-		}
-	}
-}
-
-async function handleNoOrders() {
-    console.log("No orders found. Resetting and placing orders at last known layers.");
-    if (infinityMode){
-        infinityGrid()
-        return
-    } else {
-        await jitoController("bulk");
-		monitorPrice();
-    }
-}
-
-async function handleMissingOrders(checkArray, sortedLayers) {
-    // Identify which key(s) are missing
-    
-    if (!checkArray.includes(buyKeyHigh)) {
-		filledOrder = "High Buy Order";
-		orderToCancel = [sellKeyHigh];
-	} else if (!checkArray.includes(buyKeyLow)) {
-		filledOrder = "Low Buy Order";
-		orderToCancel = [sellKeyHigh];
-	} else if (!checkArray.includes(sellKeyLow)) {
-		filledOrder = "Low Sell Order";
-		orderToCancel = [buyKeyLow];
-	} else if (!checkArray.includes(sellKeyHigh)) {
-		filledOrder = "High Sell Order";
-		orderToCancel = [buyKeyLow];
-	}
-
-    console.log(`Filled Order: ${filledOrder}. Shifting price points and placing new orders.`);
-	await recalculateLayers(sortedLayers);
-}
-
-async function handleExcessiveOrders() {
-    console.log(`Excessive orders found, resetting.`);
-    if (infinityMode){
-        jitoController("cancel");
-    } else {
-        await jitoController("cancel");
-		await jitoController("bulk");
-		monitorPrice();
-    }
 }
 
 async function handleRetry(error, retries, maxRetries) {
@@ -945,21 +740,12 @@ async function updateUSDVal(mintAddress, balance, decimals) {
 async function updateMainDisplay() {
 	console.clear();
 	console.log(`Jupgrid v${version}`);
-	if (infinityMode) {
-		console.log(`\u{267E}  Infinity Mode`);
-	} else {
-		console.log(`\u{1F680} Classic Grid Mode`);
-	}
+	console.log(`\u{267E}  Infinity Mode`);
 	console.log(`\u{1F4B0} Wallet: ${displayAddress}`);
 	formatElapsedTime(startTime);
 	console.log(`-`);
-	if (infinityMode) {
 		console.log(`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}`,
 		);
-	} else {
-	console.log(`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)} -\n\u{2195} Spread: ${spread}%`,
-	);
-	}
 
 	try {
 		// Attempt to fetch the new USD values
@@ -969,26 +755,15 @@ async function updateMainDisplay() {
 		currUSDBalanceA = tempUSDBalanceA ?? currUSDBalanceA; // Fallback to current value if undefined
 		currUSDBalanceB = tempUSDBalanceB ?? currUSDBalanceB; // Fallback to current value if undefined
 		currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-		if (infinityMode) {
-			tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
-			const queryParams = {
-				inputMint: selectedAddressB,
-				outputMint: selectedAddressA,
-				amount: tradeSizeInLamports,
-				slippageBps: 0,
-			};
-			const response = await axios.get(quoteurl, { params: queryParams });
-			newPrice = response.data.outAmount;
-		} else {
+		tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
 		const queryParams = {
-			inputMint: selectedAddressA,
-			outputMint: selectedAddressB,
+			inputMint: selectedAddressB,
+			outputMint: selectedAddressA,
 			amount: tradeSizeInLamports,
 			slippageBps: 0,
 		};
 		const response = await axios.get(quoteurl, { params: queryParams });
 		newPrice = response.data.outAmount;
-		}
 	} catch (error) {
 		//Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
@@ -1006,9 +781,9 @@ Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
 	let profitOrLoss = currUsdTotalBalance - initUsdTotalBalance;
 	let percentageChange = (profitOrLoss / initUsdTotalBalance) * 100;
 	if (profitOrLoss > 0) {
-		console.log(`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (${percentageChange.toFixed(2)}%)`)}`);
+		console.log(`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (+${percentageChange.toFixed(2)}%)`)}`);
 	} else if (profitOrLoss < 0) {
-		console.log(`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (${Math.abs(percentageChange).toFixed(2)}%)`)}`);
+		console.log(`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (-${Math.abs(percentageChange).toFixed(2)}%)`)}`);
 	} else {
 		console.log(`Difference : $${profitOrLoss.toFixed(2)} (0.00%)`); // Neutral
 	}
@@ -1016,89 +791,14 @@ Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
 Performance Delta: ${(percentageChange - ((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
 -
 Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))}
-Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))}`);
-}
-
-async function recalculateLayers(layers) {
-    console.log("\u{1F504} Calculating new price layers");
-    buyInput = tradeSizeInLamports;
-    sellOutput = tradeSizeInLamports;
-
-	if (!layers) {
-		console.log('Error: layers is undefined or null');
-		process.exit(0);
-	}
-    let currentBuyLayer = Object.keys(layers).find((key) => layers[key] === sellInput);
-    let currentSellLayer = Object.keys(layers).find((key) => layers[key] === buyOutput);
-
-    if (filledOrder.includes("Buy")) {
-        // Price went down, move both orders down
-        currentBuyLayer = Number(currentBuyLayer) - 1;
-        currentSellLayer = Number(currentSellLayer) - 1;
-        console.log(`Last filled order was a buy. Moving down to layer ${currentBuyLayer} for buy order and layer ${currentSellLayer} for sell order.`);
-    } else if (filledOrder.includes("Sell")) {
-        // Price went up, move both orders up
-        currentBuyLayer = Number(currentBuyLayer) + 1;
-        currentSellLayer = Number(currentSellLayer) + 1;
-        console.log(`Last filled order was a sell. Moving up to layer ${currentBuyLayer} for buy order and layer ${currentSellLayer} for sell order.`);
-    } else {
-        console.log(`Error in determining last filled order.`);
-        process.exit(0);
-    }
-    sellInput = layers[currentBuyLayer];
-    buyOutput = layers[currentSellLayer];
-
-    // Update newLayer based on filled order type
-    if (filledOrder.includes("Buy")) {
-		newLayer = layers[currentBuyLayer];
-		newLayer2 = layers[currentBuyLayer - 1];
-		console.log(`High Buy Layer: ${newLayer}`);
-		console.log(`buyOutput: ${buyOutput}`);
-		console.log(`sellInput: ${sellInput}`);
-		console.log(`Low Sell Layer: ${newLayer2}`);
-	} else {
-		newLayer = layers[currentSellLayer];
-		newLayer2 = layers[currentSellLayer + 1];
-		console.log(`High Buy Layer: ${newLayer}`);
-		console.log(`buyOutput: ${buyOutput}`);
-		console.log(`sellInput: ${sellInput}`);
-		console.log(`Low Sell Layer: ${newLayer2}`);
-	}
-	
-    await jitoController("renew");
-	monitorPrice();
-}
-
-async function setOrders() {
-	if (shutDown) return;
-	console.log("");
-	try {
-		// Send the "buy" transactions
-		if (shutDown) return;
-		if (buyInput >= currBalanceA * Math.pow(10, selectedDecimalsA)) {
-			console.log(`\u{1F6A8} Insufficient ${selectedTokenA} balance to place buy order.
-Balance: ${currBalanceA}. Required: ${buyInput / Math.pow(10, selectedDecimalsA)}
-Please balance your tokens and try again. Exiting...`);
-			process.exit(0);
-		}
-
-		if (shutDown) return;
-		if (sellInput >= currBalanceB * Math.pow(10, selectedDecimalsB)) {
-			console.log(`\u{1F6A8} Insufficient ${selectedTokenB} balance to place buy order.
-Balance: ${currBalanceB}. Required: ${sellInput / Math.pow(10, selectedDecimalsB)}
-Please balance tokens and try again. Exiting...`);
-			process.exit(0);
-		}
-		console.log("\u{1F4B1} Placing Trade Layers");
-
-		await jitoController("bulk");
-		console.log("Pause for 5 seconds to allow orders to finalize on blockchain.");
-		await delay(5000);
-
-		//monitorPrice(selectedAddressA, selectedAddressB, tradeSizeInLamports);
-	} catch (error) {
-		console.error("Error:", error);
-	}
+Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))}
+-
+Starting Balance A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(initBalanceA.toFixed(5))}
+Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalanceB.toFixed(5))}
+-
+Balance Change A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))}
+Balance Change B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta((currBalanceB - initBalanceB).toFixed(5))}
+Trades: ${counter}`);
 }
 
 async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
@@ -1183,26 +883,18 @@ async function jitoTipCheck() {
                 "landed_tips_99th_percentile_sol": Number(row[5].toFixed(8)),
 				"ema_landed_tips_50th_percentile": Number(row[6].toFixed(8)),
             };
-            console.table(data);
+            //console.table(data);
             return data;
         })
         .catch(err => console.error(err));
 }
 
 async function jitoController(task) {
-    console.log("Start Jito Controller");
-	console.log(`Task: ${task}`);
 	let result = "unknown";
     // Initial operation
     switch(task) {
         case 'cancel':
             result = await jitoCancelOrder(task);
-            break;
-        case 'bulk':
-            result = await jitoBulkOrders(task);
-            break;
-        case 'renew':
-            result = await jitoRenewOrders(task);
             break;
 		case 'infinity':
 			result = await jitoSetInfinity(task);
@@ -1214,12 +906,10 @@ async function jitoController(task) {
 			//unintended code
 			console.log("Unknown Error state. Exiting...");
 			process.exit(0);
-			break;
     }
 	jitoRetry = 1;
     // Retry loop
     while (jitoRetry < 20) {
-        console.log("Result: ", result);
         switch(result) {
             case 'succeed':
                 console.log("Operation Succeeded");
@@ -1229,16 +919,6 @@ async function jitoController(task) {
                 console.log("Retrying Cancel Orders...");
                 jitoRetry++;
                 result = await jitoCancelOrder(task);
-                break;
-            case 'renewFail':
-                console.log("Retrying Renew Orders...");
-                jitoRetry++;
-                result = await jitoRenewOrders(task);
-                break;
-            case 'bulkFail':
-                console.log("Retrying Bulk Orders...");
-                jitoRetry++;
-                result = await jitoBulkOrders(task);
                 break;
 			case 'infinityFail':
 				console.log("Retrying Infinity Orders...");
@@ -1250,10 +930,6 @@ async function jitoController(task) {
 				jitoRetry++;
 				result = await jitoRebalance(task);
 				break;
-            case 'unknown':
-                console.log("Unknown state, incrementing retry counter...");
-                jitoRetry++;
-                break;
 			default:
 				console.log("Unknown Error state. Exiting...");
 				process.exit(0);
@@ -1275,111 +951,17 @@ async function jitoCancelOrder(task) {
 	}
 }
 
-async function jitoBulkOrders(task) {
-	console.log("Placing Bulk Orders");	
-	let base1 = Keypair.generate();
-	let base2 = Keypair.generate();
-	let base3 = Keypair.generate();
-	let base4 = Keypair.generate();
-	let buyOrder1 = await createTx(buyInput, buyOutput, selectedAddressA, selectedAddressB, base1);
-	let buyOrder2 = await createTx(buyInput, buyOutput2, selectedAddressA, selectedAddressB, base2);
-	let sellOrder1 = await createTx(sellInput, sellOutput, selectedAddressB, selectedAddressA, base3);
-	let sellOrder2 = await createTx(sellInput2, sellOutput, selectedAddressB, selectedAddressA, base4);
-	let transaction1 = buyOrder1.transaction;
-	buyKeyHigh = buyOrder1.orderPubkey
-	let transaction2 = buyOrder2.transaction;
-	buyKeyLow = buyOrder2.orderPubkey
-	let transaction3 = sellOrder1.transaction;
-	sellKeyLow = sellOrder1.orderPubkey
-	let transaction4 = sellOrder2.transaction;
-	sellKeyHigh = sellOrder2.orderPubkey
-	let transactions = [transaction1, transaction2, transaction3, transaction4];
-
-	console.log("buykeyhigh: ", buyKeyHigh, "InputToken: ", selectedTokenA, "OutputToken: ", selectedTokenB, "Amount: ", buyInput, "Output: ", buyOutput);
-	console.log("buykeylow: ", buyKeyLow, "InputToken: ", selectedTokenA, "OutputToken: ", selectedTokenB, "Amount: ", buyInput, "Output: ", buyOutput2);
-	console.log("sellkeylow: ", sellKeyLow, "InputToken: ", selectedTokenB, "OutputToken: ", selectedTokenA, "Amount: ", sellInput, "Output: ", sellOutput);
-	console.log("sellkeyhigh: ", sellKeyHigh, "InputToken: ", selectedTokenB, "OutputToken: ", selectedTokenA, "Amount: ", sellInput2, "Output: ", sellOutput);
-
-
-	// Initialize orderArray and add the order keys
-	let orderArray = [];
-	orderArray.push(buyKeyHigh, buyKeyLow, sellKeyLow, sellKeyHigh);
-
-	let result = await handleJitoBundle(task, ...transactions);
-	return result;
-}
-
-async function jitoRenewOrders(task) {
-    // Cancel the specified order
-    let transaction1 = await cancelOrder(orderToCancel);
-	let newOrder
-	let newOrder2
-    let base = Keypair.generate();
-	let base1 = Keypair.generate();
-    // Place a new order at the specified layer
-    console.log("Filled Order: ", filledOrder);
-	console.log("Order to Cancel: ", orderToCancel);
-
-    if (filledOrder.includes("Buy")) {
-		console.log("Creating New Buy Order");
-		console.log("Transaction 2: new buy low", buyInput, selectedTokenA, "for", newLayer, selectedTokenB)
-		console.log("Transaction 3: new sell high", newLayer2, selectedTokenB, "for", sellOutput, selectedTokenA)
-        newOrder = await createTx(buyInput, newLayer, selectedAddressA, selectedAddressB, base);
-		newOrder2 = await createTx(newLayer2, sellOutput, selectedAddressB, selectedAddressA, base1);
-		//Newly opened BUY is buyKeyLow
-		//Newly opened SELL is Sellkey1
-		//Existing SellKey1 is sellKeyHigh
-		//Existing buyKeyLow is BuyKey1
-		buyKeyLow = buyKeyHigh;
-		sellKeyLow = sellKeyHigh
-		buyKeyHigh = newOrder.orderPubkey;
-		sellKeyHigh = newOrder2.orderPubkey;
-		//orderArray = []
-		//orderArray.push(buyKeyHigh, buyKeyLow, sellKeyLow, sellKeyHigh);
-    } else if (filledOrder.includes("Sell")) {
-		console.log("Creating New Sell Order");
-		console.log("Transaction 2: new sell high", newLayer, selectedTokenB, "for", sellOutput, selectedTokenA)
-		console.log("Transaction 3: new buy low", buyInput, selectedTokenA, "for", newLayer2, selectedTokenB)
-        newOrder = await createTx(newLayer, sellOutput, selectedAddressB, selectedAddressA, base);
-		newOrder2 = await createTx(buyInput, newLayer2, selectedAddressA, selectedAddressB, base1);
-		//Newly opened BUY is Buykey1
-		//Newly opened SELL is sellKeyHigh
-		//Existing sellKeyHigh is SellKey1
-		//Existing BuyKey1 is buyKeyLow
-		buyKeyLow = buyKeyHigh;
-		sellKeyLow = sellKeyHigh;
-		sellKeyHigh = newOrder.orderPubkey;
-		buyKeyHigh = newOrder2.orderPubkey;
-		//orderArray = []
-		//orderArray.push(buyKeyHigh, buyKeyLow, sellKeyLow, sellKeyHigh);
-    }
-	console.log("Buy Key High: ", buyKeyHigh);
-	console.log("Buy Key Low: ", buyKeyLow);
-	console.log("Sell Key Low: ", sellKeyLow);
-	console.log("Sell Key High: ", sellKeyHigh);
-	let transaction2 = newOrder.transaction;
-	let transaction3 = newOrder2.transaction;
-    // Logic to calculate new order and single order to cancel
-    // Create transactions (1x cancel, 1x place)
-	let transactions = [transaction1, transaction2, transaction3];
-    let result = await handleJitoBundle(task, ...transactions);
-    return result;
-}
-
 async function jitoSetInfinity(task) {
 	//cancel any existing, place 2 new
 	let base1 = Keypair.generate();
 	let base2 = Keypair.generate();
 
 	await checkOpenOrders();
-	console.log('InfBuyIn', infinityBuyInput);
-	console.log('InfBuyOut', infinityBuyOutput);
-	console.log('InfSellIn', infinitySellInput);
-	console.log('InfSellOut',infinitySellOutput);
+
 	if (checkArray.length === 0) {
 		console.log("No orders found to cancel.");
-		let order1 = await createTx(infinityBuyInput, infinityBuyOutput, selectedAddressA, selectedAddressB, base1);
-		let order2 = await createTx(infinitySellInput, infinitySellOutput, selectedAddressB, selectedAddressA, base2);
+		let order1 = await createTx(infinityBuyInputLamports, infinityBuyOutputLamports, selectedAddressA, selectedAddressB, base1);
+		let order2 = await createTx(infinitySellInputLamports, infinitySellOutputLamports, selectedAddressB, selectedAddressA, base2);
 		let transaction1 = order1.transaction;
 		let transaction2 = order2.transaction;
 		let transactions = [transaction1, transaction2];
@@ -1388,8 +970,8 @@ async function jitoSetInfinity(task) {
 	} else {
 		console.log("Found Orders to Cancel");
 		let transaction1 = await cancelOrder(checkArray, payer);
-		let order1 = await createTx(infinityBuyInput, infinityBuyOutput, selectedAddressA, selectedAddressB, base1);
-		let order2 = await createTx(infinitySellInput, infinitySellOutput, selectedAddressB, selectedAddressA, base2);
+		let order1 = await createTx(infinityBuyInputLamports, infinityBuyOutputLamports, selectedAddressA, selectedAddressB, base1);
+		let order2 = await createTx(infinitySellInputLamports, infinitySellOutputLamports, selectedAddressB, selectedAddressA, base2);
 		let transaction2 = order1.transaction;
 		let transaction3 = order2.transaction;
 		let transactions = [transaction1, transaction2, transaction3];
@@ -1409,7 +991,6 @@ async function jitoRebalance(task) {
 }
 
 async function handleJitoBundle(task, ...transactions) {
-	//console.log(...transactions);
 	let jitoData = await jitoTipCheck();
 	let tipValueInSol = jitoData.ema_landed_tips_50th_percentile;
 	let tipValueInLamports = tipValueInSol * 1_000_000_000;
@@ -1457,8 +1038,8 @@ async function sendJitoBundle(task, bundletoSend) {
 	const encodedBundle = bundletoSend.map(encodeTransactionToBase58);
 
 	let { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	console.log(`PreJitoA: ${preJitoA}`);
-	console.log(`PreJitoB: ${preJitoB}`);
+	//console.log(`PreJitoA: ${preJitoA}`);
+	//console.log(`PreJitoB: ${preJitoB}`);
 
     const data = {
         jsonrpc: '2.0',
@@ -1467,29 +1048,35 @@ async function sendJitoBundle(task, bundletoSend) {
         params: [encodedBundle]
     };
 
-    const response = await fetch(JitoBlockEngine, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-
-	const responseText = await response.text();  // Get the response body as text
-    console.log('Response:', responseText);  // Log the response body
-
-    if (!response.ok) {
-        let errorData;
+    let response;
+    let maxRetries = 5;
+    for(let i = 0; i <= maxRetries; i++) {
         try {
-            errorData = JSON.parse(responseText);  // Try to parse the response body as JSON
-        } catch {
-            errorData = responseText;  // If parsing fails, use the raw response body
-        }
-        console.error('Error Status:', response.status); // Log the error status (e.g., 404, 500, etc.`)
-        console.error('Error Details:', errorData); // Log the error details
-        program.exit(0);
-    }
+            response = await fetch(JitoBlockEngine, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+			
+            if (response.ok) break; // if response is ok, we break the loop
 
+            if (response.status === 429) {
+                const waitTime = Math.min(MIN_WAIT * Math.pow(2, i), MAX_WAIT);
+                const jitter = Math.random() * 0.3 * waitTime;
+                await new Promise(resolve => setTimeout(resolve, waitTime + jitter));
+            } else {
+                throw new Error('Unexpected error');
+            }
+        } catch (error) {
+            if (i === maxRetries) {
+                console.error('Max retries exceeded');
+                program.exit(0);
+            }
+        }
+    }
+	const responseText = await response.text();  // Get the response body as text
     const responseData = JSON.parse(responseText);  // Parse the response body as JSON
 
     const result = responseData.result;
@@ -1538,22 +1125,6 @@ async function sendJitoBundle(task, bundletoSend) {
 				console.log("Orders Cancelled Successfully");
 				return 'succeed';
 			}
-		case 'renew':
-			if (checkArray.length !== 4) {
-				console.log("Renewing Orders Failed, Retrying...");
-				return 'renewFail';
-			} else {
-				console.log("Orders Renewed Successfully");
-				return 'succeed';
-			}
-		case 'bulk':
-			if (checkArray.length !== 4) {
-				console.log("Placing Bulk Orders Failed, Retrying...");
-				return 'bulkFail';
-			} else {
-				console.log("Bulk Orders Placed Successfully");
-				return 'succeed';
-			}
 		case 'infinity':
 			if (checkArray.length !== 2) {
 				console.log("Placing Infinity Orders Failed, Retrying...");
@@ -1575,42 +1146,6 @@ async function sendJitoBundle(task, bundletoSend) {
 			console.log("Unknown state, retrying...");
 			return 'unknown';
 	}
-}
-
-async function getBundleStatus(bundleId) {
-    const url = 'https://mainnet.block-engine.jito.wtf/api/v1/bundles';
-    const data = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getBundleStatuses',
-        params: [[bundleId]]
-    };
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
-    });
-
-    const responseText = await response.text();  // Get the response body as text
-
-    if (!response.ok) {
-        console.error('Error Status:', response.status); // Log the error status (e.g., 404, 500, etc.)
-        console.error('Error Response:', responseText); // Log the raw response body
-        throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    let responseData;
-    try {
-        responseData = JSON.parse(responseText);  // Try to parse the response body as JSON
-    } catch (error) {
-        console.error('Failed to parse response as JSON:', responseText);  // Log the raw response body
-        throw error;
-    }
-
-    return responseData.result;
 }
 
 async function rebalanceTokens(inputMint, outputMint, rebalanceValue, rebalanceSlippageBPS, quoteurl) {
@@ -1705,29 +1240,20 @@ async function cancelOrder(target) {
 
 async function balanceCheck() {
 	//Update balances and profits
+	console.log("Checking Balances");
 	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
 	
 	console.log("Balances Updated");
 	// Calculate profit
-	profitA = currentBalances.usdBalanceA - initUsdBalanceA;
-	profitB = currentBalances.usdBalanceB - initUsdBalanceB;
 	currBalanceA = currentBalances.balanceA;
 	currBalanceB = currentBalances.balanceB;
 	currUSDBalanceA = currentBalances.usdBalanceA;
 	currUSDBalanceB = currentBalances.usdBalanceB;
 	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB;
-	let percentageOfA = 0;
-	let percentageOfB = 0;
-	if (currUsdTotalBalance > 0) {
-		percentageOfA = (currUSDBalanceA / currUsdTotalBalance) * 100;
-		percentageOfB = (currUSDBalanceB / currUsdTotalBalance) * 100;
-	}
 	tokenARebalanceValue = currentBalances.tokenARebalanceValue;
 	tokenBRebalanceValue = currentBalances.tokenBRebalanceValue;
 
 	//Rebalancing allowed check
-	if ((rebalanceAllowed && (percentageOfA < rebalancePercentage || percentageOfB < rebalancePercentage)) || infinityMode) {
-		if (infinityMode) {
 			if (currUsdTotalBalance < infinityTarget) {
 				console.log(`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`);
 				process.exit(0); // Exit program
@@ -1740,46 +1266,31 @@ async function balanceCheck() {
 				let deficit = (targetUsdBalancePerToken - currUSDBalanceB) * Math.pow(10, selectedDecimalsA);
 
 				// Calculate how much of TokenA we need to sell to buy the deficit amount of TokenB
-				adjustmentA = (-1 * deficit) / tokenARebalanceValue;
+				adjustmentA = Math.floor(Math.abs((-1 * deficit) / tokenARebalanceValue));
 			} else if (currUSDBalanceB > targetUsdBalancePerToken) {
 				// Calculate how much we have exceeded the target
 				let surplus = (currUSDBalanceB - targetUsdBalancePerToken) * Math.pow(10, selectedDecimalsB);
 
 				// Calculate how much of TokenB we need to sell to get rid of the surplus
-				adjustmentB = -1 * (surplus / tokenBRebalanceValue);
+				adjustmentB = Math.floor(Math.abs(-1 * (surplus / tokenBRebalanceValue)));
 			}
 			} else {
 				console.log("Within 1% of target, skipping rebalance")
 				return "skip"
 			}
-			rebalanceSlippageBPS = 200;
-			console.log("Infinity Mode Enabled");
-		} else {
-			let targetUsdBalancePerToken = currUsdTotalBalance / 2;
-			adjustmentA = targetUsdBalancePerToken - currUSDBalanceA;
-			adjustmentB = targetUsdBalancePerToken - currUSDBalanceB;
-		}
-
-		if (adjustmentA < 0) {
+			let rebalanceSlippageBPS = 200; // 2% slippage
+		if (adjustmentA > 0) {
 			// Token A's USD balance is above the target, calculate how much Token A to sell
-			let rebalanceValue = adjustmentA;
-			if (!infinityMode) {
-				rebalanceValue = (Math.abs(adjustmentA) / Math.abs(tokenARebalanceValue)) * Math.pow(10, selectedDecimalsA);
-			}
-			console.log(`Need to sell ${chalk.cyan(Math.abs(rebalanceValue / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)} to balance.`);
-			let rebalanceTx = await rebalanceTokens(selectedAddressA, selectedAddressB, Math.abs(rebalanceValue), rebalanceSlippageBPS, quoteurl);
+			console.log(`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to balance.`);
+			let rebalanceTx = await rebalanceTokens(selectedAddressA, selectedAddressB, adjustmentA, rebalanceSlippageBPS, quoteurl);
 			return rebalanceTx;
-		} else if (adjustmentB < 0) {
+		} else if (adjustmentB > 0) {
 			// Token B's USD balance is above the target, calculate how much Token B to sell
-			let rebalanceValue = adjustmentB;
-			if (!infinityMode) {
-				rebalanceValue = (Math.abs(adjustmentB) / Math.abs(tokenBRebalanceValue)) * Math.pow(10, selectedDecimalsB);
-			}
-			console.log(`Need to sell ${chalk.magenta(Math.abs(rebalanceValue / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} to balance.`);
-			let rebalanceTx = await rebalanceTokens(selectedAddressB, selectedAddressA, Math.abs(rebalanceValue), rebalanceSlippageBPS, quoteurl);
+			console.log(`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to balance.`);
+			let rebalanceTx = await rebalanceTokens(selectedAddressB, selectedAddressA, adjustmentB, rebalanceSlippageBPS, quoteurl);
 			return rebalanceTx;
 		}
-	}
+	
 }
 
 process.on("SIGINT", () => {

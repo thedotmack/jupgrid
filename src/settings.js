@@ -3,8 +3,6 @@ import dotenv from "dotenv";
 import fs from "fs";
 import promptSync from "prompt-sync";
 
-import { Wallet } from "@project-serum/anchor";
-import * as solanaWeb3 from "@solana/web3.js";
 import { Keypair } from "@solana/web3.js";
 import { initialize } from "./jupgrid.js";
 import * as utils from "./utils.js";
@@ -97,15 +95,10 @@ function saveuserSettings(
 	selectedTokenB,
 	selectedAddressB,
 	selectedDecimalsB,
-	tradeSize,
 	spread,
-	rebalanceAllowed,
-	rebalancePercentage,
-	rebalanceSlippageBPS,
 	monitorDelay,
 	stopLossUSD,
 	infinityTarget,
-	infinityMode,
 ) {
 	try {
 		fs.writeFileSync(
@@ -118,15 +111,10 @@ function saveuserSettings(
 					selectedTokenB,
 					selectedAddressB,
 					selectedDecimalsB,
-					tradeSize,
 					spread,
-					rebalanceAllowed,
-					rebalancePercentage,
-					rebalanceSlippageBPS,
 					monitorDelay,
 					stopLossUSD,
 					infinityTarget,
-					infinityMode,
 				},
 				null,
 				4,
