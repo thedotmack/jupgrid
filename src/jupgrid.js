@@ -98,19 +98,12 @@ let {
 	tokenRebalanceValue = null,
 	tokenARebalanceValue = 0,
 	tokenBRebalanceValue = 0,
-	validStopLossUSD = false,
-	validInfinityTarget = false,
 	startTime = new Date(),
 	monitorDelay = null,
 	adjustmentA = 0,
 	adjustmentB = 0,
 	stopLoss = false,
-	transactionArray = [],
 	jitoRetry = 0,
-	infinityBuyInput,
-	infinityBuyOutput,
-	infinitySellInput,
-	infinitySellOutput,
 	infinityBuyInputLamports,
 	infinityBuyOutputLamports,
 	infinitySellInputLamports,
@@ -528,86 +521,6 @@ function formatElapsedTime(startTime) {
 	console.log(`\u{23F1}  Run time: ${hours}:${minutes}:${seconds}`);
 }
 
-/*
-async function infinityGrid() {
-
-	if (shutDown) return;
-	await jitoController("cancel");
-	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
-	const queryParams = {
-		inputMint: selectedAddressB,
-		outputMint: selectedAddressA,
-		amount: tradeSizeInLamports,
-		slippageBps: 0,
-	};
-	const response = await axios.get(quoteurl, { params: queryParams });
-	let priceResponse = response.data.outAmount / Math.pow(10, selectedDecimalsA);
-
-	currBalanceA = currentBalances.balanceA; // Current balance of token A
-	currBalanceB = currentBalances.balanceB; // Current balance of token B
-	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
-	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
-	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
-
-	if (currUsdTotalBalance < stopLossUSD) {
-		//Emergency Stop Loss
-		//console.clear();
-		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
-		stopLoss = true;
-		cancelOrder();
-		process.kill(process.pid, 'SIGINT');
-	}
-	// Calculate the new prices of tokenB when it's up 1% and down 1%
-	let newPriceBUp = priceResponse * (1 + spreadbps / 10000); // *1.01 1% increase
-	let newPriceBDown = priceResponse * (1 - spreadbps / 10000); // *0.99 1% decrease
-
-	let newBalanceUp = currBalanceB * newPriceBUp;
-	let newBalanceDown = currBalanceB * newPriceBDown;
-
-	let balanceDifferenceUp = infinityTarget - newBalanceUp;
-	let balanceDifferenceDown = infinityTarget - newBalanceDown;
-
-	let amountToTradeUp = balanceDifferenceUp / newPriceBUp;
-	let amountToTradeDown = balanceDifferenceDown / newPriceBDown;
-
-	let marketUpIn = (currBalanceB * newPriceBUp - infinityTarget) / newPriceBUp; // USD Output, then Div by price to get lamports
-	let marketUpOut = marketUpIn * newPriceBUp; //Lamports * Price to get USD Input
-	let marketUpCalc = marketUpOut / marketUpIn; //Calculated Market Price for extra checking
-
-	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
-Infinity Target: ${infinityTarget}
-Current ${selectedTokenB} Balance: ${currBalanceB} (${currUSDBalanceB.toFixed(2)})
-
-${selectedTokenB} up ${spread}%: ${newPriceBUp.toFixed(5)}
-Amount of ${selectedTokenB} to send: ${marketUpIn.toFixed(5)}
-Amount of ${selectedTokenA} to receive: ${marketUpOut.toFixed(5)}
-Calculated Market Price: ${marketUpCalc.toFixed(5)}`);
-
-	// Calculate the amount of tokenB to buy to maintain the target USD value
-	let marketDownOut = (infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown; // USD Output, then Div by price to get lamports
-	let marketDownIn = marketDownOut * newPriceBDown; //Lamports * Price to get USD Input
-	let marketDownCalc = marketDownIn / marketDownOut; //Calculated Market Price for extra checking
-
-	console.log(`\n${selectedTokenB} down ${spread}%: ${newPriceBDown.toFixed(5)}
-Amount of ${selectedTokenB} to recieve: ${marketDownOut.toFixed(5)}
-Amount of ${selectedTokenA} to send: ${marketDownIn.toFixed(5)}
-Calculated Market Price: ${marketDownCalc.toFixed(5)}`);
-	
-	//Buy layer
-	infinityBuyInput = Math.floor(marketDownIn * Math.pow(10, selectedDecimalsA))
-	infinityBuyOutput = Math.floor(marketDownOut * Math.pow(10, selectedDecimalsB))
-	infinitySellInput = Math.floor(marketUpIn * Math.pow(10, selectedDecimalsB))
-	infinitySellOutput = Math.floor(marketUpOut * Math.pow(10, selectedDecimalsA))
-
-	let profitCalc = infinitySellInput - infinityBuyOutput / Math.pow(10, selectedDecimalsB);
-	console.log(`\nSuggested Profit per Trade: ${profitCalc} ${selectedTokenB}`);
-	counter++
-	await jitoController("infinity");
-	console.log("Pause for 5 seconds to allow orders to finalize on blockchain.",await delay(5000));
-	monitor()
-}
-*/
 async function infinityGrid() {
     if (shutDown) return;
     await jitoController("cancel");
@@ -630,10 +543,9 @@ async function infinityGrid() {
 
     if (currUsdTotalBalance < stopLossUSD) {
         //Emergency Stop Loss
-        //console.clear();
+        console.clear();
         console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
         stopLoss = true;
-        cancelOrder();
         process.kill(process.pid, 'SIGINT');
     }
     // Calculate the new prices of tokenB when it's up 1% and down 1%
@@ -772,7 +684,6 @@ async function updateMainDisplay() {
 		console.clear();
 		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Cashing out and Exiting`);
 		stopLoss = true;
-		cancelOrder();
 		process.kill(process.pid, 'SIGINT');
 	}
 	console.log(`-
