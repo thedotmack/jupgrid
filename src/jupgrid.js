@@ -1,30 +1,43 @@
-//#region imports
-import axios from "axios";
-import chalk from "chalk";
-import fetch from "cross-fetch";
-import * as fs from "fs";
-import ora from "ora";
-
-import { LimitOrderProvider, ownerFilter } from "@jup-ag/limit-order-sdk";
-import * as solanaWeb3 from "@solana/web3.js";
-import { Keypair, Connection, PublicKey, VersionedTransaction, SystemProgram, TransactionMessage } from "@solana/web3.js";
+// #region imports
+import axios from 'axios';
 import bs58 from 'bs58';
+import chalk from 'chalk';
+import fetch from 'cross-fetch';
+import * as fs from 'fs';
+import ora from 'ora';
 
+import {
+	LimitOrderProvider,
+	ownerFilter
+} from '@jup-ag/limit-order-sdk';
+import { program } from '@project-serum/anchor/dist/cjs/native/system.js';
+import * as solanaWeb3 from '@solana/web3.js';
+import {
+	Connection,
+	Keypair,
+	PublicKey,
+	SystemProgram,
+	TransactionMessage,
+	VersionedTransaction
+} from '@solana/web3.js';
 
-
-import { envload, loaduserSettings, saveuserSettings } from "./settings.js";
+import {
+	envload,
+	loaduserSettings,
+	saveuserSettings
+} from './settings.js';
 import {
 	delay,
 	downloadTokensList,
 	getTokenAccounts,
 	getTokens,
 	questionAsync,
-	rl,
-} from "./utils.js";
-import { program } from "@project-serum/anchor/dist/cjs/native/system.js";
-//#endregion
+	rl
+} from './utils.js';
 
-//#region constants
+// #endregion
+
+// #region constants
 // use fs to to read version from package.json
 const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
@@ -33,37 +46,37 @@ const version = packageInfo.version;
 const [payer, rpcUrl] = envload();
 
 const connection = new Connection(rpcUrl, "processed", {
-	confirmTransactionInitialTimeout: 5000,
+	confirmTransactionInitialTimeout: 5000
 });
 const limitOrder = new LimitOrderProvider(connection);
 
 let shutDown = false;
 
-let walletAddress = payer.publicKey.toString();
-let displayAddress = `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
+const walletAddress = payer.publicKey.toString();
+const displayAddress = `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
 
 const quoteurl = "https://quote-api.jup.ag/v6/quote";
-const JitoBlockEngine = "https://mainnet.block-engine.jito.wtf/api/v1/bundles"
+const JitoBlockEngine = "https://mainnet.block-engine.jito.wtf/api/v1/bundles";
 
 const TIP_ACCOUNTS = [
-	'96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
-	'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
-	'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
-	'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49',
-	'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
-	'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt',
-	'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
-	'3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
+	"96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
+	"HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+	"Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+	"ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+	"DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+	"ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+	"DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+	"3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT"
 ];
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SOL_MINT_ADDRESS = "So11111111111111111111111111111111111111112";
 
 const getRandomTipAccount = () =>
-TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
-//#endregion
+	TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
+// #endregion
 
-//#region properties
+// #region properties
 let {
 	validTokenA = null,
 	validTokenB = null,
@@ -120,10 +133,10 @@ let {
 		monitorDelay: null,
 		stopLossUSD: null,
 		infinityTarget: null,
-		infinityMode: null,
-	},
+		infinityMode: null
+	}
 } = {};
-//#endregion
+// #endregion
 
 async function loadQuestion() {
 	try {
@@ -144,17 +157,17 @@ async function loadQuestion() {
 						if (responseQ === "Y") {
 							try {
 								// Show user data
-								const userSettings = loaduserSettings();								
+								const userSettings = loaduserSettings();
 								console.log("User data loaded successfully.");
-									console.log(
-										`Infinity Mode Enabled.
+								console.log(
+									`Infinity Mode Enabled.
 Token A: ${userSettings.selectedTokenA}
 Token B: ${userSettings.selectedTokenB}
 Infinity Target: ${userSettings.infinityTarget}
 Spread: ${userSettings.spread}%
 Stop Loss: ${userSettings.stopLossUSD}
-Monitoring delay: ${userSettings.monitorDelay}ms`,
-									);	
+Monitoring delay: ${userSettings.monitorDelay}ms`
+								);
 								// Prompt for confirmation to use these settings
 								rl.question(
 									"Proceed with these settings? (Y/N): ",
@@ -173,31 +186,41 @@ Monitoring delay: ${userSettings.monitorDelay}ms`,
 												spread,
 												monitorDelay,
 												stopLossUSD,
-												infinityTarget,
+												infinityTarget
 											} = userSettings);
-											console.log("Settings applied successfully!");
+											console.log(
+												"Settings applied successfully!"
+											);
 											initialize();
 										} else if (confirmResponse === "N") {
-											console.log("Discarding saved settings, please continue.");
+											console.log(
+												"Discarding saved settings, please continue."
+											);
 											initialize(); // Start initialization with blank settings
 										} else {
-											console.log("Invalid response. Please type 'Y' or 'N'.");
+											console.log(
+												"Invalid response. Please type 'Y' or 'N'."
+											);
 											askForLoadSettings(); // Re-ask the original question
 										}
-									},
+									}
 								);
 							} catch (error) {
-								console.error(`Failed to load settings: ${error}`);
+								console.error(
+									`Failed to load settings: ${error}`
+								);
 								initialize(); // Proceed with initialization in case of error
 							}
 						} else if (responseQ === "N") {
 							console.log("Starting with blank settings.");
 							initialize();
 						} else {
-							console.log("Invalid response. Please type 'Y' or 'N'.");
+							console.log(
+								"Invalid response. Please type 'Y' or 'N'."
+							);
 							askForLoadSettings(); // Re-ask if the response is not Y/N
 						}
-					},
+					}
 				);
 			};
 
@@ -235,10 +258,12 @@ async function initialize() {
 
 	if (userSettings.selectedTokenA) {
 		const tokenAExists = tokens.some(
-			(token) => token.symbol === userSettings.selectedTokenA,
+			(token) => token.symbol === userSettings.selectedTokenA
 		);
 		if (!tokenAExists) {
-			console.log(`Token ${userSettings.selectedTokenA} from user data not found in the updated token list. Please re-enter.`);
+			console.log(
+				`Token ${userSettings.selectedTokenA} from user data not found in the updated token list. Please re-enter.`
+			);
 			userSettings.selectedTokenA = null; // Reset selected token A
 			userSettings.selectedAddressA = null; // Reset selected address
 			userSettings.selectedDecimalsA = null; // Reset selected token decimals
@@ -248,15 +273,20 @@ async function initialize() {
 	}
 
 	while (!validTokenA) {
-		const answer = await questionAsync(`Please Enter The First Token Symbol (A) (Case Sensitive): `);
+		const answer = await questionAsync(
+			`Please Enter The First Token Symbol (A) (Case Sensitive): `
+		);
 		const token = tokens.find((t) => t.symbol === answer);
 		if (token) {
 			console.log(`Selected Token: ${token.symbol}
 Token Address: ${token.address}
 Token Decimals: ${token.decimals}`);
-			const confirmAnswer = await questionAsync(`Is this the correct token? (Y/N): `);
+			const confirmAnswer = await questionAsync(
+				`Is this the correct token? (Y/N): `
+			);
 			if (
-				confirmAnswer.toLowerCase() === "y" || confirmAnswer.toLowerCase() === "yes"
+				confirmAnswer.toLowerCase() === "y" ||
+				confirmAnswer.toLowerCase() === "yes"
 			) {
 				validTokenA = true;
 				selectedTokenA = token.symbol;
@@ -269,9 +299,13 @@ Token Decimals: ${token.decimals}`);
 	}
 
 	if (userSettings.selectedTokenB) {
-		const tokenBExists = tokens.some((token) => token.symbol === userSettings.selectedTokenB);
+		const tokenBExists = tokens.some(
+			(token) => token.symbol === userSettings.selectedTokenB
+		);
 		if (!tokenBExists) {
-			console.log(`Token ${userSettings.selectedTokenB} from user data not found in the updated token list. Please re-enter.`);
+			console.log(
+				`Token ${userSettings.selectedTokenB} from user data not found in the updated token list. Please re-enter.`
+			);
 			userSettings.selectedTokenB = null; // Reset selected token B
 			userSettings.selectedAddressB = null; // Reset selected address
 			userSettings.selectedDecimalsB = null; // Reset selected token decimals
@@ -279,16 +313,23 @@ Token Decimals: ${token.decimals}`);
 			validTokenB = true;
 		}
 	}
-	
+
 	while (!validTokenB) {
-		const answer = await questionAsync(`Please Enter The Second Token Symbol (B) (Case Sensitive): `);
+		const answer = await questionAsync(
+			`Please Enter The Second Token Symbol (B) (Case Sensitive): `
+		);
 		const token = tokens.find((t) => t.symbol === answer);
 		if (token) {
 			console.log(`Selected Token: ${token.symbol}
 Token Address: ${token.address}
 Token Decimals: ${token.decimals}`);
-			const confirmAnswer = await questionAsync(`Is this the correct token? (Y/N): `);
-			if (confirmAnswer.toLowerCase() === "y" || confirmAnswer.toLowerCase() === "yes") {
+			const confirmAnswer = await questionAsync(
+				`Is this the correct token? (Y/N): `
+			);
+			if (
+				confirmAnswer.toLowerCase() === "y" ||
+				confirmAnswer.toLowerCase() === "yes"
+			) {
 				validTokenB = true;
 				selectedTokenB = token.symbol;
 				selectedAddressB = token.address;
@@ -301,14 +342,21 @@ Token Decimals: ${token.decimals}`);
 
 	// If infinity target value is not valid, prompt the user
 	while (!validInfinityTarget) {
-		const infinityTargetInput = await questionAsync(`Please Enter the Infinity Target Value: `);
+		const infinityTargetInput = await questionAsync(
+			`Please Enter the Infinity Target Value: `
+		);
 		infinityTarget = Math.floor(parseFloat(infinityTargetInput));
-		if (!isNaN(infinityTarget) && Number.isInteger(infinityTarget) && infinityTarget > userSettings.stopLossUSD
+		if (
+			!isNaN(infinityTarget) &&
+			Number.isInteger(infinityTarget) &&
+			infinityTarget > userSettings.stopLossUSD
 		) {
 			userSettings.infinityTarget = infinityTarget;
 			validInfinityTarget = true;
 		} else {
-			console.log("Invalid infinity target value. Please enter a valid integer that is larger than the stop loss value.");
+			console.log(
+				"Invalid infinity target value. Please enter a valid integer that is larger than the stop loss value."
+			);
 		}
 	}
 
@@ -317,77 +365,104 @@ Token Decimals: ${token.decimals}`);
 	if (userSettings.spread) {
 		validSpread = !isNaN(parseFloat(userSettings.spread));
 		if (!validSpread) {
-			console.log("Invalid spread percentage found in user data. Please re-enter.");
+			console.log(
+				"Invalid spread percentage found in user data. Please re-enter."
+			);
 			userSettings.spread = null; // Reset spread percentage
 		} else validSpread = true;
 	}
 
 	// If spread percentage is not valid, prompt the user
 	while (!validSpread) {
-		const spreadInput = await questionAsync("What % Spread Difference Between Market and Orders? Recommend >0.3% to cover Jupiter Fees, but 1% or greater for best performance:");
+		const spreadInput = await questionAsync(
+			"What % Spread Difference Between Market and Orders? Recommend >0.3% to cover Jupiter Fees, but 1% or greater for best performance:"
+		);
 		spread = parseFloat(spreadInput);
 		if (!isNaN(spread)) {
 			userSettings.spread = spread;
 			validSpread = true;
 		} else {
-			console.log("Invalid spread percentage. Please enter a valid number (No % Symbol).");
+			console.log(
+				"Invalid spread percentage. Please enter a valid number (No % Symbol)."
+			);
 		}
 	}
 
 	if (userSettings.stopLossUSD) {
 		validStopLossUSD = !isNaN(parseFloat(userSettings.stopLossUSD));
 		if (!validStopLossUSD) {
-			console.log("Invalid stop loss value found in user data. Please re-enter.");
+			console.log(
+				"Invalid stop loss value found in user data. Please re-enter."
+			);
 			userSettings.stopLossUSD = null; // Reset stop loss value
 		} else validStopLossUSD = true;
 	}
-	
+
 	// If stop loss value is not valid, prompt the user
 	while (!validStopLossUSD) {
-		const stopLossUSDInput = await questionAsync(`Please Enter the Stop Loss Value in USD: (Enter 0 for no stoploss) `);
+		const stopLossUSDInput = await questionAsync(
+			`Please Enter the Stop Loss Value in USD: (Enter 0 for no stoploss) `
+		);
 		stopLossUSD = parseFloat(stopLossUSDInput);
 		if (!isNaN(stopLossUSD)) {
 			userSettings.stopLossUSD = stopLossUSD;
 			validStopLossUSD = true;
 		} else {
-			console.log("Invalid stop loss value. Please enter a valid number.");
+			console.log(
+				"Invalid stop loss value. Please enter a valid number."
+			);
 		}
 	}
 
 	while (!validMonitorDelay) {
-		const monitorDelayQuestion = await questionAsync(`Enter the delay between price checks in milliseconds (minimum 5000ms): `);
+		const monitorDelayQuestion = await questionAsync(
+			`Enter the delay between price checks in milliseconds (minimum 5000ms): `
+		);
 		const parsedMonitorDelay = parseInt(monitorDelayQuestion.trim());
 		if (!isNaN(parsedMonitorDelay) && parsedMonitorDelay >= 5000) {
 			monitorDelay = parsedMonitorDelay;
 			validMonitorDelay = true;
 		} else {
-			console.log("Invalid monitor delay. Please enter a valid number greater than or equal to 5000.");
+			console.log(
+				"Invalid monitor delay. Please enter a valid number greater than or equal to 5000."
+			);
 		}
 	}
 
 	spreadbps = spread * 100;
 	rl.close(); // Close the readline interface after question loops are done.
-	
-	saveuserSettings(selectedTokenA, selectedAddressA, selectedDecimalsA, selectedTokenB, selectedAddressB, selectedDecimalsB, spread, monitorDelay, stopLossUSD, infinityTarget);
-	//First Price check during init
-	console.log("Getting Latest Price Data...");
-	tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
-		const queryParams = {
-			inputMint: selectedAddressB,
-			outputMint: selectedAddressA,
-			amount: tradeSizeInLamports,
-			slippageBps: 0,
-		};
-		const response = await axios.get(quoteurl, { params: queryParams });
-		
-		newPrice = response.data.outAmount;
-		startPrice = response.data.outAmount;
 
-		console.clear();
-		console.log(`Starting JupGrid Infinity Mode
+	saveuserSettings(
+		selectedTokenA,
+		selectedAddressA,
+		selectedDecimalsA,
+		selectedTokenB,
+		selectedAddressB,
+		selectedDecimalsB,
+		spread,
+		monitorDelay,
+		stopLossUSD,
+		infinityTarget
+	);
+	// First Price check during init
+	console.log("Getting Latest Price Data...");
+	tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
+	const queryParams = {
+		inputMint: selectedAddressB,
+		outputMint: selectedAddressA,
+		amount: tradeSizeInLamports,
+		slippageBps: 0
+	};
+	const response = await axios.get(quoteurl, { params: queryParams });
+
+	newPrice = response.data.outAmount;
+	startPrice = response.data.outAmount;
+
+	console.clear();
+	console.log(`Starting JupGrid Infinity Mode
 Your Token Selection for A - Symbol: ${selectedTokenA}, Address: ${selectedAddressA}
 Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddressB}`);
-		startInfinity();
+	startInfinity();
 }
 
 if (loaded === false) {
@@ -397,7 +472,13 @@ if (loaded === false) {
 async function startInfinity() {
 	console.log(`Checking for existing orders to cancel...`);
 	await jitoController("cancel");
-	let initialBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+	const initialBalances = await getBalance(
+		payer,
+		selectedAddressA,
+		selectedAddressB,
+		selectedTokenA,
+		selectedTokenB
+	);
 	initBalanceA = initialBalances.balanceA;
 	initUsdBalanceA = initialBalances.usdBalanceA;
 	initBalanceB = initialBalances.balanceB;
@@ -408,8 +489,13 @@ async function startInfinity() {
 	infinityGrid();
 }
 
-async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB) {
-
+async function getBalance(
+	payer,
+	selectedAddressA,
+	selectedAddressB,
+	selectedTokenA,
+	selectedTokenB
+) {
 	async function getSOLBalanceAndUSDC() {
 		const lamports = await connection.getBalance(payer.publicKey);
 		const solBalance = lamports / solanaWeb3.LAMPORTS_PER_SOL;
@@ -424,13 +510,14 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 					inputMint: SOL_MINT_ADDRESS,
 					outputMint: USDC_MINT_ADDRESS,
 					amount: lamports, // Amount in lamports
-					slippageBps: 0,
+					slippageBps: 0
 				};
 				const response = await axios.get(quoteurl, {
-					params: queryParams,
+					params: queryParams
 				});
 				usdBalance = response.data.outAmount / Math.pow(10, 6) || 0;
-				tokenRebalanceValue = response.data.outAmount / (lamports / Math.pow(10, 3));
+				tokenRebalanceValue =
+					response.data.outAmount / (lamports / Math.pow(10, 3));
 			} catch (error) {
 				console.error("Error fetching USDC equivalent for SOL:", error);
 			}
@@ -439,16 +526,27 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 	}
 
 	async function getTokenAndUSDCBalance(mintAddress, decimals) {
-		if (!mintAddress ||	mintAddress === "So11111111111111111111111111111111111111112") {
+		if (
+			!mintAddress ||
+			mintAddress === "So11111111111111111111111111111111111111112"
+		) {
 			return getSOLBalanceAndUSDC();
 		}
 
-		const tokenAccounts = await getTokenAccounts(connection, payer.publicKey, mintAddress);
+		const tokenAccounts = await getTokenAccounts(
+			connection,
+			payer.publicKey,
+			mintAddress
+		);
 		if (tokenAccounts.value.length > 0) {
-			const balance = tokenAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount;
+			const balance =
+				tokenAccounts.value[0].account.data.parsed.info.tokenAmount
+					.uiAmount;
 			let usdBalance = 0;
 			if (balance === 0) {
-				console.log(`You do not have a balance for ${mintAddress}, please check and try again.`);
+				console.log(
+					`You do not have a balance for ${mintAddress}, please check and try again.`
+				);
 				process.exit(0);
 			}
 			if (mintAddress !== USDC_MINT_ADDRESS) {
@@ -456,16 +554,17 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 					inputMint: mintAddress,
 					outputMint: USDC_MINT_ADDRESS,
 					amount: Math.floor(balance * Math.pow(10, decimals)),
-					slippageBps: 0,
+					slippageBps: 0
 				};
 
 				try {
 					const response = await axios.get(quoteurl, {
-						params: queryParams,
+						params: queryParams
 					});
-					//Save USD Balance and adjust down for Lamports
+					// Save USD Balance and adjust down for Lamports
 					usdBalance = response.data.outAmount / Math.pow(10, 6);
-					tokenRebalanceValue = response.data.outAmount / (balance * Math.pow(10, 6));
+					tokenRebalanceValue =
+						response.data.outAmount / (balance * Math.pow(10, 6));
 				} catch (error) {
 					console.error("Error fetching USDC equivalent:", error);
 					usdBalance = 1;
@@ -473,7 +572,9 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 			} else {
 				usdBalance = balance; // If the token is USDC, its balance is its USD equivalent
 				if (usdBalance === 0) {
-					console.log(`You do not have any USDC, please check and try again.`);
+					console.log(
+						`You do not have any USDC, please check and try again.`
+					);
 					process.exit(0);
 				}
 				tokenRebalanceValue = 1;
@@ -485,11 +586,19 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 		}
 	}
 
-	let resultA = await getTokenAndUSDCBalance(selectedAddressA, selectedDecimalsA);
-	let resultB = await getTokenAndUSDCBalance(selectedAddressB, selectedDecimalsB);
+	const resultA = await getTokenAndUSDCBalance(
+		selectedAddressA,
+		selectedDecimalsA
+	);
+	const resultB = await getTokenAndUSDCBalance(
+		selectedAddressB,
+		selectedDecimalsB
+	);
 
 	if (resultA.balance === 0 || resultB.balance === 0) {
-		console.log("Please ensure you have a balance in both tokens to continue.");
+		console.log(
+			"Please ensure you have a balance in both tokens to continue."
+		);
 		process.exit(0);
 	}
 
@@ -499,7 +608,7 @@ async function getBalance(payer, selectedAddressA, selectedAddressB, selectedTok
 		tokenARebalanceValue: resultA.tokenRebalanceValue,
 		balanceB: resultB.balance,
 		usdBalanceB: resultB.usdBalance,
-		tokenBRebalanceValue: resultB.tokenRebalanceValue,
+		tokenBRebalanceValue: resultB.tokenRebalanceValue
 	};
 }
 
@@ -522,43 +631,56 @@ function formatElapsedTime(startTime) {
 }
 
 async function infinityGrid() {
-    if (shutDown) return;
-    await jitoController("cancel");
-    let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-    tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
-    const queryParams = {
-        inputMint: selectedAddressB,
-        outputMint: selectedAddressA,
-        amount: tradeSizeInLamports,
-        slippageBps: 0,
-    };
-    const response = await axios.get(quoteurl, { params: queryParams });
-    let priceResponse = response.data.outAmount / Math.pow(10, selectedDecimalsA);
+	if (shutDown) return;
+	await jitoController("cancel");
+	const currentBalances = await getBalance(
+		payer,
+		selectedAddressA,
+		selectedAddressB,
+		selectedTokenA,
+		selectedTokenB
+	);
+	tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
+	const queryParams = {
+		inputMint: selectedAddressB,
+		outputMint: selectedAddressA,
+		amount: tradeSizeInLamports,
+		slippageBps: 0
+	};
+	const response = await axios.get(quoteurl, { params: queryParams });
+	const priceResponse =
+		response.data.outAmount / Math.pow(10, selectedDecimalsA);
 
-    currBalanceA = currentBalances.balanceA; // Current balance of token A
-    currBalanceB = currentBalances.balanceB; // Current balance of token B
-    currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
-    currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
-    currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
+	currBalanceA = currentBalances.balanceA; // Current balance of token A
+	currBalanceB = currentBalances.balanceB; // Current balance of token B
+	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
+	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
+	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
 
-    if (currUsdTotalBalance < stopLossUSD) {
-        //Emergency Stop Loss
-        console.clear();
-        console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
-        stopLoss = true;
-        process.kill(process.pid, 'SIGINT');
-    }
-    // Calculate the new prices of tokenB when it's up 1% and down 1%
-    let newPriceBUp = priceResponse * (1 + spreadbps / 10000);
-    let newPriceBDown = priceResponse * (1 - spreadbps / 10000);
+	if (currUsdTotalBalance < stopLossUSD) {
+		// Emergency Stop Loss
+		console.clear();
+		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
+		stopLoss = true;
+		process.kill(process.pid, "SIGINT");
+	}
+	// Calculate the new prices of tokenB when it's up 1% and down 1%
+	const newPriceBUp = priceResponse * (1 + spreadbps / 10000);
+	const newPriceBDown = priceResponse * (1 - spreadbps / 10000);
 
 	// Calculate the amount of tokenB to sell to maintain the target USD value
-	let infinitySellInput = Math.abs((infinityTarget - currBalanceB * newPriceBUp) / newPriceBUp); // USD Output, then Div by price to get lamports
-	let infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); //Lamports * Price to get USD Input
+	const infinitySellInput = Math.abs(
+		(infinityTarget - currBalanceB * newPriceBUp) / newPriceBUp
+	); // USD Output, then Div by price to get lamports
+	const infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); // Lamports * Price to get USD Input
 
 	// Convert to lamports
-	infinitySellInputLamports = Math.floor(infinitySellInput * Math.pow(10, selectedDecimalsB));
-	infinitySellOutputLamports = Math.floor(infinitySellOutput * Math.pow(10, selectedDecimalsA));
+	infinitySellInputLamports = Math.floor(
+		infinitySellInput * Math.pow(10, selectedDecimalsB)
+	);
+	infinitySellOutputLamports = Math.floor(
+		infinitySellOutput * Math.pow(10, selectedDecimalsA)
+	);
 
 	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
 	Infinity Target: ${infinityTarget}
@@ -569,63 +691,76 @@ async function infinityGrid() {
 	Amount of ${selectedTokenA} to receive: ${infinitySellOutput.toFixed(5)} (${infinitySellOutputLamports} lamports)`);
 
 	// Calculate the amount of tokenB to buy to maintain the target USD value
-	let infinityBuyOutput = Math.abs((infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown); // USD Output, then Div by price to get lamports
-	let infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); //Lamports * Price to get USD Input
+	const infinityBuyOutput = Math.abs(
+		(infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown
+	); // USD Output, then Div by price to get lamports
+	const infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); // Lamports * Price to get USD Input
 
 	// Convert to lamports and floor the values
-	infinityBuyOutputLamports = Math.floor(infinityBuyOutput * Math.pow(10, selectedDecimalsB));
-	infinityBuyInputLamports = Math.floor(infinityBuyInput * Math.pow(10, selectedDecimalsA));
+	infinityBuyOutputLamports = Math.floor(
+		infinityBuyOutput * Math.pow(10, selectedDecimalsB)
+	);
+	infinityBuyInputLamports = Math.floor(
+		infinityBuyInput * Math.pow(10, selectedDecimalsA)
+	);
 
 	console.log(`\n${selectedTokenB} down ${spread}%: ${newPriceBDown.toFixed(5)}
 	Amount of ${selectedTokenB} to send: ${infinityBuyOutput.toFixed(5)} (${infinityBuyOutputLamports} lamports)
 	Amount of ${selectedTokenA} to receive: ${infinityBuyInput.toFixed(5)} (${infinityBuyInputLamports} lamports)`);
 
-	console.log(infinityBuyInputLamports)
-	console.log(infinityBuyOutputLamports)
-	console.log(infinitySellInputLamports)
-	console.log(infinitySellOutputLamports)
+	console.log(infinityBuyInputLamports);
+	console.log(infinityBuyOutputLamports);
+	console.log(infinitySellInputLamports);
+	console.log(infinitySellOutputLamports);
 
-	counter++
+	counter++;
 	await jitoController("infinity");
-	console.log("Pause for 5 seconds to allow orders to finalize on blockchain.",await delay(5000));
-	monitor()
+	console.log(
+		"Pause for 5 seconds to allow orders to finalize on blockchain.",
+		await delay(5000)
+	);
+	monitor();
 }
 
 async function monitor() {
-    if (shutDown) return;
-	let maxRetries = 5;
-    let retries = 0;
-    await updateMainDisplay();
-    while (retries < maxRetries) {
-        try {
-            await checkOpenOrders();
-            await handleOrders(checkArray);
-            break; // Break the loop if we've successfully handled the price monitoring
-        } catch (error) {
-            await handleRetry(error, retries, maxRetries);
-        }
-    }
+	if (shutDown) return;
+	const maxRetries = 5;
+	const retries = 0;
+	await updateMainDisplay();
+	while (retries < maxRetries) {
+		try {
+			await checkOpenOrders();
+			await handleOrders(checkArray);
+			break; // Break the loop if we've successfully handled the price monitoring
+		} catch (error) {
+			await handleRetry(error, retries, maxRetries);
+		}
+	}
 }
 
 async function handleOrders(checkArray) {
-		if (checkArray.length !== 2) {
-			infinityGrid();
-		} else {
-			console.log("2 open orders. Waiting for change.");
-			await delay(monitorDelay);
-			await monitor();
-		}
+	if (checkArray.length !== 2) {
+		infinityGrid();
+	} else {
+		console.log("2 open orders. Waiting for change.");
+		await delay(monitorDelay);
+		await monitor();
+	}
 }
 
 async function handleRetry(error, retries, maxRetries) {
-    console.log(error);
-    console.error(`Error: Connection or Token Data Error (Monitor Price) - (Attempt ${retries + 1} of ${maxRetries})`);
-    retries++;
+	console.log(error);
+	console.error(
+		`Error: Connection or Token Data Error (Monitor Price) - (Attempt ${retries + 1} of ${maxRetries})`
+	);
+	retries++;
 
-    if (retries === maxRetries) {
-        console.error("Maximum number of retries reached. Unable to retrieve data.");
-        return null;
-    }
+	if (retries === maxRetries) {
+		console.error(
+			"Maximum number of retries reached. Unable to retrieve data."
+		);
+		return null;
+	}
 }
 
 async function updateUSDVal(mintAddress, balance, decimals) {
@@ -633,14 +768,14 @@ async function updateUSDVal(mintAddress, balance, decimals) {
 		inputMint: mintAddress,
 		outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 		amount: Math.floor(balance * Math.pow(10, decimals)),
-		slippageBps: 0,
+		slippageBps: 0
 	};
 
 	try {
 		const response = await axios.get(quoteurl, {
-			params: queryParams,
+			params: queryParams
 		});
-		//Save USD Balance and adjust down for Lamports
+		// Save USD Balance and adjust down for Lamports
 		const usdBalance = response.data.outAmount / Math.pow(10, 6);
 		return usdBalance;
 	} catch (error) {
@@ -656,45 +791,60 @@ async function updateMainDisplay() {
 	console.log(`\u{1F4B0} Wallet: ${displayAddress}`);
 	formatElapsedTime(startTime);
 	console.log(`-`);
-		console.log(`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}`,
-		);
+	console.log(
+		`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}`
+	);
 
 	try {
 		// Attempt to fetch the new USD values
-		const tempUSDBalanceA = await updateUSDVal(selectedAddressA, currBalanceA, selectedDecimalsA);
-		const tempUSDBalanceB = await updateUSDVal(selectedAddressB, currBalanceB, selectedDecimalsB);
+		const tempUSDBalanceA = await updateUSDVal(
+			selectedAddressA,
+			currBalanceA,
+			selectedDecimalsA
+		);
+		const tempUSDBalanceB = await updateUSDVal(
+			selectedAddressB,
+			currBalanceB,
+			selectedDecimalsB
+		);
 
 		currUSDBalanceA = tempUSDBalanceA ?? currUSDBalanceA; // Fallback to current value if undefined
 		currUSDBalanceB = tempUSDBalanceB ?? currUSDBalanceB; // Fallback to current value if undefined
 		currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-		tradeSizeInLamports = (1 * Math.pow(10, selectedDecimalsB))
+		tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
 		const queryParams = {
 			inputMint: selectedAddressB,
 			outputMint: selectedAddressA,
 			amount: tradeSizeInLamports,
-			slippageBps: 0,
+			slippageBps: 0
 		};
 		const response = await axios.get(quoteurl, { params: queryParams });
 		newPrice = response.data.outAmount;
 	} catch (error) {
-		//Error is not critical. Reuse the previous balances and try another update again next cycle.
+		// Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
 	if (currUsdTotalBalance < stopLossUSD) {
-		//Emergency Stop Loss
+		// Emergency Stop Loss
 		console.clear();
-		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Cashing out and Exiting`);
+		console.log(
+			`\n\u{1F6A8} Emergency Stop Loss Triggered! - Cashing out and Exiting`
+		);
 		stopLoss = true;
-		process.kill(process.pid, 'SIGINT');
+		process.kill(process.pid, "SIGINT");
 	}
 	console.log(`-
 Starting Balance : $${initUsdTotalBalance.toFixed(2)}
 Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
-	let profitOrLoss = currUsdTotalBalance - initUsdTotalBalance;
-	let percentageChange = (profitOrLoss / initUsdTotalBalance) * 100;
+	const profitOrLoss = currUsdTotalBalance - initUsdTotalBalance;
+	const percentageChange = (profitOrLoss / initUsdTotalBalance) * 100;
 	if (profitOrLoss > 0) {
-		console.log(`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (+${percentageChange.toFixed(2)}%)`)}`);
+		console.log(
+			`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (+${percentageChange.toFixed(2)}%)`)}`
+		);
 	} else if (profitOrLoss < 0) {
-		console.log(`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (-${Math.abs(percentageChange).toFixed(2)}%)`)}`);
+		console.log(
+			`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (-${Math.abs(percentageChange).toFixed(2)}%)`)}`
+		);
 	} else {
 		console.log(`Difference : $${profitOrLoss.toFixed(2)} (0.00%)`); // Neutral
 	}
@@ -725,14 +875,19 @@ async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
 			const tokenAccounts = await getTokenAccounts(
 				connection,
 				payer.publicKey,
-				new solanaWeb3.PublicKey("9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh"),
+				new solanaWeb3.PublicKey(
+					"9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh"
+				)
 			);
 			if (tokenAccounts.value.length === 0) {
-				console.log("No ARB token accounts found. Please purchase at least 25k ARB and try again.");
+				console.log(
+					"No ARB token accounts found. Please purchase at least 25k ARB and try again."
+				);
 				process.exit(0);
 			}
-			
-			const response = await fetch("https://jup.ag/api/limit/v1/createOrder",
+
+			const response = await fetch(
+				"https://jup.ag/api/limit/v1/createOrder",
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -747,12 +902,14 @@ async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
 						referralAccount:
 							"7WGULgEo4Veqj6sCvA3VNxGgBf3EXJd8sW2XniBda3bJ",
 						referralName: "Jupiter GridBot"
-					}),
-				},
+					})
+				}
 			);
 
 			if (!response.ok) {
-				throw new Error(`Failed to create order: ${response.statusText}`);
+				throw new Error(
+					`Failed to create order: ${response.statusText}`
+				);
 			}
 
 			const responseData = await response.json();
@@ -762,15 +919,18 @@ async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
 			const transactionBuf = Buffer.from(encodedTransaction, "base64");
 			const transaction = solanaWeb3.Transaction.from(transactionBuf);
 			transaction.sign(payer, base);
-			return { transaction: transaction, orderPubkey: responseData.orderPubkey };
-			
-			//to be handled later
-			//return { txid, orderPubkey: responseData.orderPubkey};
+			return {
+				transaction,
+				orderPubkey: responseData.orderPubkey
+			};
+
+			// to be handled later
+			// return { txid, orderPubkey: responseData.orderPubkey};
 		} catch (error) {
-				await delay(2000);
-			}
+			await delay(2000);
 		}
-	//If we get here, its proper broken...
+	}
+	// If we get here, its proper broken...
 	throw new Error("Order Creation failed after maximum attempts.");
 }
 
@@ -781,72 +941,74 @@ function encodeTransactionToBase58(transaction) {
 }
 
 async function jitoTipCheck() {
-    return fetch("https://jito-labs.metabaseapp.com/api/public/dashboard/016d4d60-e168-4a8f-93c7-4cd5ec6c7c8d/dashcard/154/card/188?parameters=%5B%5D")
-        .then(response => response.json())
-        .then(json => json.data.rows[0])
-        .then(row => {
-            let data = {
-                "time": row[0],
-                "landed_tips_25th_percentile_sol": Number(row[1].toFixed(8)),
-                "landed_tips_50th_percentile_sol": Number(row[2].toFixed(8)),
-                "landed_tips_75th_percentile_sol": Number(row[3].toFixed(8)),
-                "landed_tips_95th_percentile_sol": Number(row[4].toFixed(8)),
-                "landed_tips_99th_percentile_sol": Number(row[5].toFixed(8)),
-				"ema_landed_tips_50th_percentile": Number(row[6].toFixed(8)),
-            };
-            //console.table(data);
-            return data;
-        })
-        .catch(err => console.error(err));
+	return fetch(
+		"https://jito-labs.metabaseapp.com/api/public/dashboard/016d4d60-e168-4a8f-93c7-4cd5ec6c7c8d/dashcard/154/card/188?parameters=%5B%5D"
+	)
+		.then((response) => response.json())
+		.then((json) => json.data.rows[0])
+		.then((row) => {
+			const data = {
+				time: row[0],
+				landed_tips_25th_percentile_sol: Number(row[1].toFixed(8)),
+				landed_tips_50th_percentile_sol: Number(row[2].toFixed(8)),
+				landed_tips_75th_percentile_sol: Number(row[3].toFixed(8)),
+				landed_tips_95th_percentile_sol: Number(row[4].toFixed(8)),
+				landed_tips_99th_percentile_sol: Number(row[5].toFixed(8)),
+				ema_landed_tips_50th_percentile: Number(row[6].toFixed(8))
+			};
+			// console.table(data);
+			return data;
+		})
+		.catch((err) => console.error(err));
 }
 
 async function jitoController(task) {
 	let result = "unknown";
-    // Initial operation
-    switch(task) {
-        case 'cancel':
-            result = await jitoCancelOrder(task);
-            break;
-		case 'infinity':
+	// Initial operation
+	switch (task) {
+	case "cancel":
+		result = await jitoCancelOrder(task);
+		break;
+	case "infinity":
+		result = await jitoSetInfinity(task);
+		break;
+	case "rebalance":
+		result = await jitoRebalance(task);
+		break;
+	default:
+		// unintended code
+		console.log("Unknown Error state. Exiting...");
+		process.exit(0);
+	}
+	jitoRetry = 1;
+	// Retry loop
+	while (jitoRetry < 20) {
+		switch (result) {
+		case "succeed":
+			console.log("Operation Succeeded");
+			jitoRetry = 21;
+			break;
+		case "cancelFail":
+			console.log("Retrying Cancel Orders...");
+			jitoRetry++;
+			result = await jitoCancelOrder(task);
+			break;
+		case "infinityFail":
+			console.log("Retrying Infinity Orders...");
+			jitoRetry++;
 			result = await jitoSetInfinity(task);
 			break;
-		case 'rebalance':
+		case "rebalanceFail":
+			console.log("Retrying Rebalance Orders...");
+			jitoRetry++;
 			result = await jitoRebalance(task);
 			break;
 		default:
-			//unintended code
 			console.log("Unknown Error state. Exiting...");
 			process.exit(0);
-    }
-	jitoRetry = 1;
-    // Retry loop
-    while (jitoRetry < 20) {
-        switch(result) {
-            case 'succeed':
-                console.log("Operation Succeeded");
-                jitoRetry = 21;
-                break;
-            case 'cancelFail':
-                console.log("Retrying Cancel Orders...");
-                jitoRetry++;
-                result = await jitoCancelOrder(task);
-                break;
-			case 'infinityFail':
-				console.log("Retrying Infinity Orders...");
-				jitoRetry++;
-				result = await jitoSetInfinity(task);
-				break;
-			case 'rebalanceFail':
-				console.log("Retrying Rebalance Orders...");
-				jitoRetry++;
-				result = await jitoRebalance(task);
-				break;
-			default:
-				console.log("Unknown Error state. Exiting...");
-				process.exit(0);
-        }
-        console.log("End Jito Controller");
-    }
+		}
+		console.log("End Jito Controller");
+	}
 }
 
 async function jitoCancelOrder(task) {
@@ -856,158 +1018,206 @@ async function jitoCancelOrder(task) {
 		return "succeed";
 	} else {
 		console.log("Cancelling Orders");
-		let transaction1 = await cancelOrder(checkArray, payer);
-		let result = await handleJitoBundle(task, transaction1)
+		const transaction1 = await cancelOrder(checkArray, payer);
+		const result = await handleJitoBundle(task, transaction1);
 		return result;
 	}
 }
 
 async function jitoSetInfinity(task) {
-	//cancel any existing, place 2 new
-	let base1 = Keypair.generate();
-	let base2 = Keypair.generate();
+	// cancel any existing, place 2 new
+	const base1 = Keypair.generate();
+	const base2 = Keypair.generate();
 
 	await checkOpenOrders();
 
 	if (checkArray.length === 0) {
 		console.log("No orders found to cancel.");
-		let order1 = await createTx(infinityBuyInputLamports, infinityBuyOutputLamports, selectedAddressA, selectedAddressB, base1);
-		let order2 = await createTx(infinitySellInputLamports, infinitySellOutputLamports, selectedAddressB, selectedAddressA, base2);
-		let transaction1 = order1.transaction;
-		let transaction2 = order2.transaction;
-		let transactions = [transaction1, transaction2];
-		let result = await handleJitoBundle(task, ...transactions);
+		const order1 = await createTx(
+			infinityBuyInputLamports,
+			infinityBuyOutputLamports,
+			selectedAddressA,
+			selectedAddressB,
+			base1
+		);
+		const order2 = await createTx(
+			infinitySellInputLamports,
+			infinitySellOutputLamports,
+			selectedAddressB,
+			selectedAddressA,
+			base2
+		);
+		const transaction1 = order1.transaction;
+		const transaction2 = order2.transaction;
+		const transactions = [transaction1, transaction2];
+		const result = await handleJitoBundle(task, ...transactions);
 		return result;
 	} else {
 		console.log("Found Orders to Cancel");
-		let transaction1 = await cancelOrder(checkArray, payer);
-		let order1 = await createTx(infinityBuyInputLamports, infinityBuyOutputLamports, selectedAddressA, selectedAddressB, base1);
-		let order2 = await createTx(infinitySellInputLamports, infinitySellOutputLamports, selectedAddressB, selectedAddressA, base2);
-		let transaction2 = order1.transaction;
-		let transaction3 = order2.transaction;
-		let transactions = [transaction1, transaction2, transaction3];
-		let result = await handleJitoBundle(task, ...transactions);
+		const transaction1 = await cancelOrder(checkArray, payer);
+		const order1 = await createTx(
+			infinityBuyInputLamports,
+			infinityBuyOutputLamports,
+			selectedAddressA,
+			selectedAddressB,
+			base1
+		);
+		const order2 = await createTx(
+			infinitySellInputLamports,
+			infinitySellOutputLamports,
+			selectedAddressB,
+			selectedAddressA,
+			base2
+		);
+		const transaction2 = order1.transaction;
+		const transaction3 = order2.transaction;
+		const transactions = [transaction1, transaction2, transaction3];
+		const result = await handleJitoBundle(task, ...transactions);
 		return result;
 	}
 }
 
 async function jitoRebalance(task) {
-	let transaction1 = await balanceCheck();
+	const transaction1 = await balanceCheck();
 	if (transaction1 === "skip") {
 		console.log("Skipping Rebalance...");
 		return "succeed";
 	}
-	let result = await handleJitoBundle(task, transaction1);
+	const result = await handleJitoBundle(task, transaction1);
 	return result;
 }
 
 async function handleJitoBundle(task, ...transactions) {
-	let jitoData = await jitoTipCheck();
-	let tipValueInSol = jitoData.ema_landed_tips_50th_percentile;
-	let tipValueInLamports = tipValueInSol * 1_000_000_000;
-	let roundedTipValueInLamports = Math.round(tipValueInLamports);
+	const jitoData = await jitoTipCheck();
+	const tipValueInSol = jitoData.ema_landed_tips_50th_percentile;
+	const tipValueInLamports = tipValueInSol * 1_000_000_000;
+	const roundedTipValueInLamports = Math.round(tipValueInLamports);
 
 	// Limit to 9 digits
-	let limitedTipValueInLamports = Number((roundedTipValueInLamports).toFixed(9));
-    try {
-        let tipAccount = new PublicKey(getRandomTipAccount());
-        const instructionsSub = [];
-        const tipIxn = SystemProgram.transfer({
-            fromPubkey: payer.publicKey,
-            toPubkey: tipAccount,
-            lamports: limitedTipValueInLamports
-        });
-        //console.log("Tries: ",retries);
-        console.log("Jito Fee: ", limitedTipValueInLamports / Math.pow(10,9), " SOL");
-        instructionsSub.push(tipIxn);
-        const resp = await connection.getLatestBlockhash('confirmed');
+	const limitedTipValueInLamports = Number(
+		roundedTipValueInLamports.toFixed(9)
+	);
+	try {
+		const tipAccount = new PublicKey(getRandomTipAccount());
+		const instructionsSub = [];
+		const tipIxn = SystemProgram.transfer({
+			fromPubkey: payer.publicKey,
+			toPubkey: tipAccount,
+			lamports: limitedTipValueInLamports
+		});
+		// console.log("Tries: ",retries);
+		console.log(
+			"Jito Fee: ",
+			limitedTipValueInLamports / Math.pow(10, 9),
+			" SOL"
+		);
+		instructionsSub.push(tipIxn);
+		const resp = await connection.getLatestBlockhash("confirmed");
 
-        const messageSub = new TransactionMessage({
-            payerKey: payer.publicKey,
-            recentBlockhash: resp.blockhash,
-            instructions: instructionsSub,
-        }).compileToV0Message();
+		const messageSub = new TransactionMessage({
+			payerKey: payer.publicKey,
+			recentBlockhash: resp.blockhash,
+			instructions: instructionsSub
+		}).compileToV0Message();
 
-        const txSub = new VersionedTransaction(messageSub);
-        txSub.sign([payer]);
-        let bundletoSend = [...transactions, txSub];
+		const txSub = new VersionedTransaction(messageSub);
+		txSub.sign([payer]);
+		const bundletoSend = [...transactions, txSub];
 
-        // Ensure that bundletoSend is not empty
-        if (bundletoSend.length === 0) {
-            throw new Error("Bundle is empty.");
-        }
+		// Ensure that bundletoSend is not empty
+		if (bundletoSend.length === 0) {
+			throw new Error("Bundle is empty.");
+		}
 
-        // Call sendJitoBundle with the correct bundleToSend
-        let result = await sendJitoBundle(task, bundletoSend);
+		// Call sendJitoBundle with the correct bundleToSend
+		const result = await sendJitoBundle(task, bundletoSend);
 		return result;
-    } catch (error) {
-        console.error("\nBundle Construction Error: ", error);
-    }
+	} catch (error) {
+		console.error("\nBundle Construction Error: ", error);
+	}
 }
 
 async function sendJitoBundle(task, bundletoSend) {
 	const encodedBundle = bundletoSend.map(encodeTransactionToBase58);
 
-	let { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	//console.log(`PreJitoA: ${preJitoA}`);
-	//console.log(`PreJitoB: ${preJitoB}`);
+	const { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(
+		payer,
+		selectedAddressA,
+		selectedAddressB,
+		selectedTokenA,
+		selectedTokenB
+	);
+	// console.log(`PreJitoA: ${preJitoA}`);
+	// console.log(`PreJitoB: ${preJitoB}`);
 
-    const data = {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'sendBundle',
-        params: [encodedBundle]
-    };
+	const data = {
+		jsonrpc: "2.0",
+		id: 1,
+		method: "sendBundle",
+		params: [encodedBundle]
+	};
 
-    let response;
-    let maxRetries = 5;
-    for(let i = 0; i <= maxRetries; i++) {
-        try {
-            response = await fetch(JitoBlockEngine, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
-            });
-			
-            if (response.ok) break; // if response is ok, we break the loop
+	let response;
+	const maxRetries = 5;
+	for (let i = 0; i <= maxRetries; i++) {
+		try {
+			response = await fetch(JitoBlockEngine, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify(data)
+			});
 
-            if (response.status === 429) {
-                const waitTime = Math.min(MIN_WAIT * Math.pow(2, i), MAX_WAIT);
-                const jitter = Math.random() * 0.3 * waitTime;
-                await new Promise(resolve => setTimeout(resolve, waitTime + jitter));
-            } else {
-                throw new Error('Unexpected error');
-            }
-        } catch (error) {
-            if (i === maxRetries) {
-                console.error('Max retries exceeded');
-                program.exit(0);
-            }
-        }
-    }
-	const responseText = await response.text();  // Get the response body as text
-    const responseData = JSON.parse(responseText);  // Parse the response body as JSON
+			if (response.ok) break; // if response is ok, we break the loop
 
-    const result = responseData.result;
+			if (response.status === 429) {
+				const waitTime = Math.min(MIN_WAIT * Math.pow(2, i), MAX_WAIT);
+				const jitter = Math.random() * 0.3 * waitTime;
+				await new Promise((resolve) =>
+					setTimeout(resolve, waitTime + jitter)
+				);
+			} else {
+				throw new Error("Unexpected error");
+			}
+		} catch (error) {
+			if (i === maxRetries) {
+				console.error("Max retries exceeded");
+				program.exit(0);
+			}
+		}
+	}
+	const responseText = await response.text(); // Get the response body as text
+	const responseData = JSON.parse(responseText); // Parse the response body as JSON
+
+	const result = responseData.result;
 	const url = `https://explorer.jito.wtf/bundle/${result}`;
 	console.log(`\nResult ID: ${url}`);
-	//spinner.stop();
+	// spinner.stop();
 	console.log("Checking for 30 seconds...");
 	let jitoChecks = 1;
-	let maxChecks = 30;
+	const maxChecks = 30;
 	let spinner;
 	let bundleLanded = false;
 	while (jitoChecks <= maxChecks) {
-		spinner = ora(`Checking Jito Bundle Status... ${jitoChecks}/${maxChecks}`).start();
-		console.log("\nTask: ",task);
+		spinner = ora(
+			`Checking Jito Bundle Status... ${jitoChecks}/${maxChecks}`
+		).start();
+		console.log("\nTask: ", task);
 		try {
-			let { balanceA: postJitoA, balanceB: postJitoB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-			if (postJitoA !== preJitoA && postJitoB !== preJitoB) {
+			const { balanceA: postJitoA, balanceB: postJitoB } = await getBalance(
+				payer,
+				selectedAddressA,
+				selectedAddressB,
+				selectedTokenA,
+				selectedTokenB
+			);
+			if (postJitoA !== preJitoA || postJitoB !== preJitoB) {
 				bundleLanded = true;
 				spinner.stop();
-				console.log("\nBundle Landed, waiting 30 seconds for orders to finalize...");
+				console.log(
+					"\nBundle Landed, waiting 30 seconds for orders to finalize..."
+				);
 				spinner = ora("").start();
 				await delay(30000);
 				spinner.stop();
@@ -1017,100 +1227,111 @@ async function sendJitoBundle(task, bundletoSend) {
 			jitoChecks++;
 			await delay(1000);
 		} catch (error) {
-			console.error('Error in balance check:', error);
+			console.error("Error in balance check:", error);
 		}
 		spinner.stop();
 	}
-	
+
 	if (spinner) {
 		spinner.stop();
 	}
 
 	await checkOpenOrders();
-    switch (task) {
-		case 'cancel':
-			if (checkArray.length > 0) {
-				console.log("Cancelling Orders Failed, Retrying...");
-				return 'cancelFail';
-			} else {
-				console.log("Orders Cancelled Successfully");
-				return 'succeed';
-			}
-		case 'infinity':
-			if (checkArray.length !== 2) {
-				console.log("Placing Infinity Orders Failed, Retrying...");
-				return 'infinityFail';
-			} else {
-				console.log("Infinity Orders Placed Successfully");
-				return 'succeed';
-			}
-		case 'rebalance':
-			//We dont need to check open orders here
-			if (bundleLanded) {
-				console.log("Rebalancing Tokens Successful");
-				return 'succeed';
-			} else {
-				console.log("Rebalancing Tokens Failed, Retrying...");
-				return 'rebalanceFail';
-			}
-		default:
-			console.log("Unknown state, retrying...");
-			return 'unknown';
+	switch (task) {
+	case "cancel":
+		if (checkArray.length > 0) {
+			console.log("Cancelling Orders Failed, Retrying...");
+			return "cancelFail";
+		} else {
+			console.log("Orders Cancelled Successfully");
+			return "succeed";
+		}
+	case "infinity":
+		if (checkArray.length !== 2) {
+			console.log("Placing Infinity Orders Failed, Retrying...");
+			return "infinityFail";
+		} else {
+			console.log("Infinity Orders Placed Successfully");
+			return "succeed";
+		}
+	case "rebalance":
+		// We dont need to check open orders here
+		if (bundleLanded) {
+			console.log("Rebalancing Tokens Successful");
+			return "succeed";
+		} else {
+			console.log("Rebalancing Tokens Failed, Retrying...");
+			return "rebalanceFail";
+		}
+	default:
+		console.log("Unknown state, retrying...");
+		return "unknown";
 	}
 }
 
-async function rebalanceTokens(inputMint, outputMint, rebalanceValue, rebalanceSlippageBPS, quoteurl) {
+async function rebalanceTokens(
+	inputMint,
+	outputMint,
+	rebalanceValue,
+	rebalanceSlippageBPS,
+	quoteurl
+) {
 	if (shutDown) return;
 	const rebalanceLamports = Math.floor(rebalanceValue);
 	console.log(`Rebalancing Tokens ${selectedTokenA} and ${selectedTokenB}`);
-	
-		try {
-			// Fetch the quote
-			const quoteResponse = await axios.get(
-				`${quoteurl}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${rebalanceLamports}&slippageBps=${rebalanceSlippageBPS}`,
-			);
 
-			const swapApiResponse = await fetch("https://quote-api.jup.ag/v6/swap",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify({
-						quoteResponse: quoteResponse.data,
-						userPublicKey: payer.publicKey,
-						wrapAndUnwrapSol: true,
-					}),
+	try {
+		// Fetch the quote
+		const quoteResponse = await axios.get(
+			`${quoteurl}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${rebalanceLamports}&slippageBps=${rebalanceSlippageBPS}`
+		);
+
+		const swapApiResponse = await fetch(
+			"https://quote-api.jup.ag/v6/swap",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
 				},
-			);
-
-			const { blockhash } = await connection.getLatestBlockhash();
-			const swapData = await swapApiResponse.json();
-
-			if (!swapData || !swapData.swapTransaction) {
-				throw new Error("Swap transaction data not found.");
+				body: JSON.stringify({
+					quoteResponse: quoteResponse.data,
+					userPublicKey: payer.publicKey,
+					wrapAndUnwrapSol: true
+				})
 			}
+		);
 
-			// Deserialize the transaction correctly for a versioned message
-			const swapTransactionBuffer = Buffer.from(swapData.swapTransaction, "base64");
-			let transaction = VersionedTransaction.deserialize(swapTransactionBuffer);
+		const { blockhash } = await connection.getLatestBlockhash();
+		const swapData = await swapApiResponse.json();
 
-			transaction.recentBlockhash = blockhash;
-			transaction.sign([payer]);
-			return transaction;
-		} catch (error) {
-			console.error("Error during the transaction:", error);
+		if (!swapData || !swapData.swapTransaction) {
+			throw new Error("Swap transaction data not found.");
 		}
+
+		// Deserialize the transaction correctly for a versioned message
+		const swapTransactionBuffer = Buffer.from(
+			swapData.swapTransaction,
+			"base64"
+		);
+		const transaction = VersionedTransaction.deserialize(
+			swapTransactionBuffer
+		);
+
+		transaction.recentBlockhash = blockhash;
+		transaction.sign([payer]);
+		return transaction;
+	} catch (error) {
+		console.error("Error during the transaction:", error);
+	}
 }
 
 async function checkOpenOrders() {
-
-	openOrders = []
-	checkArray = []
+	openOrders = [];
+	checkArray = [];
 
 	// Make the JSON request
 	openOrders = await limitOrder.getOrders([
-		ownerFilter(payer.publicKey, "processed"),
+		ownerFilter(payer.publicKey, "processed")
 	]);
 
 	// Create an array to hold publicKey values
@@ -1119,41 +1340,47 @@ async function checkOpenOrders() {
 
 async function cancelOrder(target) {
 	console.log(target);
-    const requestData = {
-        owner: payer.publicKey.toString(),
-        feePayer: payer.publicKey.toString(),
-        orders: Array.from(target),
-    };
+	const requestData = {
+		owner: payer.publicKey.toString(),
+		feePayer: payer.publicKey.toString(),
+		orders: Array.from(target)
+	};
 
-    const response = await fetch("https://jup.ag/api/limit/v1/cancelOrders", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestData),
-    });
+	const response = await fetch("https://jup.ag/api/limit/v1/cancelOrders", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json"
+		},
+		body: JSON.stringify(requestData)
+	});
 
-    if (!response.ok) {
+	if (!response.ok) {
 		console.log("Bad Cancel Order Request");
-        throw new Error(`HTTP error! Status: ${response.status}`);
-    }
+		throw new Error(`HTTP error! Status: ${response.status}`);
+	}
 
-    const responseData = await response.json();
-    const transactionBase64 = responseData.tx;
-    const transactionBuf = Buffer.from(transactionBase64, "base64");
-    const transaction = solanaWeb3.Transaction.from(transactionBuf);
+	const responseData = await response.json();
+	const transactionBase64 = responseData.tx;
+	const transactionBuf = Buffer.from(transactionBase64, "base64");
+	const transaction = solanaWeb3.Transaction.from(transactionBuf);
 
-    const { blockhash } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.sign(payer);
-    return transaction;
+	const { blockhash } = await connection.getLatestBlockhash();
+	transaction.recentBlockhash = blockhash;
+	transaction.sign(payer);
+	return transaction;
 }
 
 async function balanceCheck() {
-	//Update balances and profits
+	// Update balances and profits
 	console.log("Checking Balances");
-	let currentBalances = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
-	
+	const currentBalances = await getBalance(
+		payer,
+		selectedAddressA,
+		selectedAddressB,
+		selectedTokenA,
+		selectedTokenB
+	);
+
 	console.log("Balances Updated");
 	// Calculate profit
 	currBalanceA = currentBalances.balanceA;
@@ -1164,53 +1391,80 @@ async function balanceCheck() {
 	tokenARebalanceValue = currentBalances.tokenARebalanceValue;
 	tokenBRebalanceValue = currentBalances.tokenBRebalanceValue;
 
-	//Rebalancing allowed check
-			if (currUsdTotalBalance < infinityTarget) {
-				console.log(`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`);
-				process.exit(0); // Exit program
-			}
-			let targetUsdBalancePerToken = infinityTarget;
-			let percentageDifference = Math.abs((currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken);
-			if (percentageDifference > 0.01) {
-			if (currUSDBalanceB < targetUsdBalancePerToken) {
-				// Calculate how much more of TokenB we need to reach the target
-				let deficit = (targetUsdBalancePerToken - currUSDBalanceB) * Math.pow(10, selectedDecimalsA);
+	// Rebalancing allowed check
+	if (currUsdTotalBalance < infinityTarget) {
+		console.log(
+			`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`
+		);
+		process.exit(0); // Exit program
+	}
+	const targetUsdBalancePerToken = infinityTarget;
+	const percentageDifference = Math.abs(
+		(currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken
+	);
+	if (percentageDifference > 0.01) {
+		if (currUSDBalanceB < targetUsdBalancePerToken) {
+			// Calculate how much more of TokenB we need to reach the target
+			const deficit =
+				(targetUsdBalancePerToken - currUSDBalanceB) *
+				Math.pow(10, selectedDecimalsA);
 
-				// Calculate how much of TokenA we need to sell to buy the deficit amount of TokenB
-				adjustmentA = Math.floor(Math.abs((-1 * deficit) / tokenARebalanceValue));
-			} else if (currUSDBalanceB > targetUsdBalancePerToken) {
-				// Calculate how much we have exceeded the target
-				let surplus = (currUSDBalanceB - targetUsdBalancePerToken) * Math.pow(10, selectedDecimalsB);
+			// Calculate how much of TokenA we need to sell to buy the deficit amount of TokenB
+			adjustmentA = Math.floor(
+				Math.abs((-1 * deficit) / tokenARebalanceValue)
+			);
+		} else if (currUSDBalanceB > targetUsdBalancePerToken) {
+			// Calculate how much we have exceeded the target
+			const surplus =
+				(currUSDBalanceB - targetUsdBalancePerToken) *
+				Math.pow(10, selectedDecimalsB);
 
-				// Calculate how much of TokenB we need to sell to get rid of the surplus
-				adjustmentB = Math.floor(Math.abs(-1 * (surplus / tokenBRebalanceValue)));
-			}
-			} else {
-				console.log("Within 1% of target, skipping rebalance")
-				return "skip"
-			}
-			let rebalanceSlippageBPS = 200; // 2% slippage
-		if (adjustmentA > 0) {
-			// Token A's USD balance is above the target, calculate how much Token A to sell
-			console.log(`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to balance.`);
-			let rebalanceTx = await rebalanceTokens(selectedAddressA, selectedAddressB, adjustmentA, rebalanceSlippageBPS, quoteurl);
-			return rebalanceTx;
-		} else if (adjustmentB > 0) {
-			// Token B's USD balance is above the target, calculate how much Token B to sell
-			console.log(`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to balance.`);
-			let rebalanceTx = await rebalanceTokens(selectedAddressB, selectedAddressA, adjustmentB, rebalanceSlippageBPS, quoteurl);
-			return rebalanceTx;
+			// Calculate how much of TokenB we need to sell to get rid of the surplus
+			adjustmentB = Math.floor(
+				Math.abs(-1 * (surplus / tokenBRebalanceValue))
+			);
 		}
-	
+	} else {
+		console.log("Within 1% of target, skipping rebalance");
+		return "skip";
+	}
+	const rebalanceSlippageBPS = 200; // 2% slippage
+	if (adjustmentA > 0) {
+		// Token A's USD balance is above the target, calculate how much Token A to sell
+		console.log(
+			`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to balance.`
+		);
+		const rebalanceTx = await rebalanceTokens(
+			selectedAddressA,
+			selectedAddressB,
+			adjustmentA,
+			rebalanceSlippageBPS,
+			quoteurl
+		);
+		return rebalanceTx;
+	} else if (adjustmentB > 0) {
+		// Token B's USD balance is above the target, calculate how much Token B to sell
+		console.log(
+			`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to balance.`
+		);
+		const rebalanceTx = await rebalanceTokens(
+			selectedAddressB,
+			selectedAddressA,
+			adjustmentB,
+			rebalanceSlippageBPS,
+			quoteurl
+		);
+		return rebalanceTx;
+	}
 }
 
 process.on("SIGINT", () => {
-    console.log("\nCTRL+C detected! Performing cleanup...");
-    shutDown = true;
-    (async () => {
-        await jitoController("cancel");
-        process.exit(0);
-    })();
+	console.log("\nCTRL+C detected! Performing cleanup...");
+	shutDown = true;
+	(async () => {
+		await jitoController("cancel");
+		process.exit(0);
+	})();
 });
 
 export { connection, initialize };

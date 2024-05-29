@@ -1,4 +1,5 @@
 ## Jupgrid: Decentralized Grid Trading Bot Version 0.5J Beta
+
 =======
 
 ## PLEASE DO NOT RUN THIS VERSION. IT IS FOR TESTING ONLY.

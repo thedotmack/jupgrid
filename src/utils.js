@@ -1,9 +1,9 @@
-import axios from 'axios';
-import crypto from 'crypto';
-import fs from 'fs';
-import readline from 'readline';
+import axios from "axios";
+import crypto from "crypto";
+import fs from "fs";
+import readline from "readline";
 
-import solanaWeb3 from '@solana/web3.js';
+import solanaWeb3 from "@solana/web3.js";
 
 function delay(ms) {
 	return new Promise((resolve) => {
@@ -72,12 +72,9 @@ class Encrypter {
 }
 
 async function getTokenAccounts(connection, address, tokenMintAddress) {
-	return await connection.getParsedTokenAccountsByOwner(
-		address,
-		{
-			mint: new solanaWeb3.PublicKey(tokenMintAddress)
-		}
-	);
+	return await connection.getParsedTokenAccountsByOwner(address, {
+		mint: new solanaWeb3.PublicKey(tokenMintAddress)
+	});
 }
 
 export {
