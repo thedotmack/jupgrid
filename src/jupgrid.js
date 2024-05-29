@@ -43,6 +43,8 @@ const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 const version = packageInfo.version;
 
+const [MIN_WAIT, MAX_WAIT] = [5e2, 5e3];
+
 const [payer, rpcUrl] = envload();
 
 const connection = new Connection(rpcUrl, "processed", {
@@ -725,7 +727,7 @@ async function infinityGrid() {
 async function monitor() {
 	if (shutDown) return;
 	const maxRetries = 5;
-	const retries = 0;
+	let retries = 0;
 	await updateMainDisplay();
 	while (retries < maxRetries) {
 		try {
@@ -733,7 +735,18 @@ async function monitor() {
 			await handleOrders(checkArray);
 			break; // Break the loop if we've successfully handled the price monitoring
 		} catch (error) {
-			await handleRetry(error, retries, maxRetries);
+			console.log(error);
+			console.error(
+				`Error: Connection or Token Data Error (Monitor Price) - (Attempt ${retries + 1} of ${maxRetries})`
+			);
+			retries++;
+
+			if (retries === maxRetries) {
+				console.error(
+					"Maximum number of retries reached. Unable to retrieve data."
+				);
+				return null;
+			}
 		}
 	}
 }
@@ -745,21 +758,6 @@ async function handleOrders(checkArray) {
 		console.log("2 open orders. Waiting for change.");
 		await delay(monitorDelay);
 		await monitor();
-	}
-}
-
-async function handleRetry(error, retries, maxRetries) {
-	console.log(error);
-	console.error(
-		`Error: Connection or Token Data Error (Monitor Price) - (Attempt ${retries + 1} of ${maxRetries})`
-	);
-	retries++;
-
-	if (retries === maxRetries) {
-		console.error(
-			"Maximum number of retries reached. Unable to retrieve data."
-		);
-		return null;
 	}
 }
 
