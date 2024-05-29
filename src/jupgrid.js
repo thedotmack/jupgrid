@@ -630,6 +630,12 @@ function formatElapsedTime(startTime) {
 	console.log(`\u{23F1}  Run time: ${hours}:${minutes}:${seconds}`);
 }
 
+async function fetchPrice() {
+    const response = await axios.get('https://price.jup.ag/v6/price?ids=SOL');
+    const price = response.data.data.SOL.price;
+    return parseFloat(price.toFixed(2));
+}
+
 async function infinityGrid() {
 	if (shutDown) return;
 	await jitoController("cancel");
@@ -651,11 +657,11 @@ async function infinityGrid() {
 	const priceResponse =
 		response.data.outAmount / Math.pow(10, selectedDecimalsA);
 
-	currBalanceA = currentBalances.balanceA; // Current balance of token A
-	currBalanceB = currentBalances.balanceB; // Current balance of token B
-	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
-	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
-	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Current total USD balance
+	//currBalanceA = currentBalances.balanceA; // Current balance of token A
+	//currBalanceB = currentBalances.balanceB; // Current balance of token B
+	//currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
+	//currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
+	//currUsdTotalBalance = currentBalances.usdBalanceA + currentBalances.usdBalanceB; // Current total USD balance
 
 	if (currUsdTotalBalance < stopLossUSD) {
 		// Emergency Stop Loss
@@ -670,7 +676,7 @@ async function infinityGrid() {
 
 	// Calculate the amount of tokenB to sell to maintain the target USD value
 	const infinitySellInput = Math.abs(
-		(infinityTarget - currBalanceB * newPriceBUp) / newPriceBUp
+		(infinityTarget - currentBalances.balanceB * newPriceBUp) / newPriceBUp
 	); // USD Output, then Div by price to get lamports
 	const infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); // Lamports * Price to get USD Input
 
@@ -684,7 +690,7 @@ async function infinityGrid() {
 
 	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
 	Infinity Target: ${infinityTarget}
-	Current ${selectedTokenB} Balance: ${currBalanceB} (${currUSDBalanceB.toFixed(2)})
+	Current ${selectedTokenB} Balance: ${currentBalances.balanceB} (${currentBalances.usdBalanceB.toFixed(2)})
 
 	${selectedTokenB} up ${spread}%: ${newPriceBUp.toFixed(5)}
 	Amount of ${selectedTokenB} to send: ${infinitySellInput.toFixed(5)} (${infinitySellInputLamports} lamports)
@@ -692,7 +698,7 @@ async function infinityGrid() {
 
 	// Calculate the amount of tokenB to buy to maintain the target USD value
 	const infinityBuyOutput = Math.abs(
-		(infinityTarget - currBalanceB * newPriceBDown) / newPriceBDown
+		(infinityTarget - currentBalances.balanceB * newPriceBDown) / newPriceBDown
 	); // USD Output, then Div by price to get lamports
 	const infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); // Lamports * Price to get USD Input
 
@@ -1147,6 +1153,9 @@ async function sendJitoBundle(task, bundletoSend) {
 		selectedTokenA,
 		selectedTokenB
 	);
+	await checkOpenOrders();
+	const preBundleOrders = checkArray;
+	console.log(`Pre Bundle Orders: ${preBundleOrders}`)
 	// console.log(`PreJitoA: ${preJitoA}`);
 	// console.log(`PreJitoB: ${preJitoB}`);
 
@@ -1218,9 +1227,28 @@ async function sendJitoBundle(task, bundletoSend) {
 				console.log(
 					"\nBundle Landed, waiting 30 seconds for orders to finalize..."
 				);
-				spinner = ora("").start();
-				await delay(30000);
-				spinner.stop();
+				if (task !== "rebalance") {
+					let bundleChecks = 1;
+						while (bundleChecks <= 30) {
+						let postBundleOrders
+						await checkOpenOrders();
+						postBundleOrders = checkArray;
+						if (postBundleOrders !== preBundleOrders) {
+							console.log(
+								"\nBundle Landed, Orders Updated, Skipping Timer"
+							);
+							await delay(1000);
+							jitoChecks = 31;
+							break;
+						} else {
+							console.log(
+								`Checking Orders for ${bundleChecks} of 30 seconds`
+							);
+							await delay(1000);
+							bundleChecks++;
+						}
+					}
+				}
 				jitoChecks = 31;
 				break;
 			}
