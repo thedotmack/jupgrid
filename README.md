@@ -2,12 +2,10 @@
 
 =======
 
-## PLEASE DO NOT RUN THIS VERSION. IT IS FOR TESTING ONLY.
-
 ![GitHub last commit](https://img.shields.io/github/last-commit/ARBProtocol/jupgrid) ![GitHub issues](https://img.shields.io/github/issues/ARBProtocol/jupgrid) ![GitHub number of milestones](https://img.shields.io/github/milestones/all/ARBProtocol/jupgrid) ![GitHub stars](https://img.shields.io/github/stars/ARBProtocol/jupgrid?style=social)
 [![Twitter Follow](https://img.shields.io/twitter/follow/arbprotocol?style=social)](https://twitter.com/arbprotocol)
 
-JupGrid is a cutting-edge, fully decentralized cryptocurrency grid trading bot designed to operate on the Jupiter Limit Order Book. It runs locally on your machine, offering a secure and personal way to automate a grid trading bot. This bot only places 1 buy and 1 sell order at a time, meaning you can be more capital-efficient!
+JupGrid is a cutting-edge, fully decentralized cryptocurrency grid trading bot designed to operate on the Jupiter Limit Order Book. It runs locally on your machine, offering a secure and personal way to automate a grid trading bot. This bot places 1 buy and 1 sell order at a time, meaning you can be more capital-efficient!
 
 Use of this bot/script is at your own risk. Use of this bot/script can lead to loss of funds, so please exercise proper due diligence and DYOR before continuing.
 
@@ -56,11 +54,10 @@ This will generate a `.env` file where you will fill in your secure data.
 
     - Token A:
     - Token B:
-    - Size (In Token A):
+    - Infinity Target Value: (Maximum $ value of Token B you want to hold - Dont set this higher than your TokenA+B value!)
     - Spread (% difference from current market price to orders):
-    - Rebalancing (Y/N)
-    - Rebalancing Threshold (% balance at which to Rebalance your holdings)-(User has $100 total, $80 in SOL and $20 USDC. Setting 20% or higher would rebalance you to approx 50/50)
-    - Rebalancing Slippage (The maximum allowed slippage at which your rebalance swap can have)
+    - Stop Loss ($ value for BOTH Token A and Token B - If your wallet hits this value, the script will stop for safety)
+    - Delay (This is used to stop you getting rate-limited by Jupiter API. JupGrid is a "slow" bot, and thus doesnt need information every second).
 
 Jupgrid will then place one buy and one sell order based on the parameters you have set.
 
@@ -73,7 +70,7 @@ The `.env` file will need to contain your Phantom Wallet Private Key and URL to 
 
 Once these are encrypted, they are no longer human-readable. Please ensure you have other copies of this information saved elsewhere.
 
-There will also be `userSettings.json` and `userPriceLayers.json` files created. This will contain data on the parameters you set during setup.
+There will also be a `userSettings.json` file created. This will contain data on the parameters you set during setup.
 
 ## Contributing 🤝
 
