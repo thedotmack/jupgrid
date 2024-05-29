@@ -675,13 +675,16 @@ async function infinityGrid() {
 	// Calculate the new prices of tokenB when it's up 1% and down 1%
 	const newPriceBUp = priceResponse * (1 + spreadbps / 10000);
 	const newPriceBDown = priceResponse * (1 - spreadbps / 10000);
+	const ratio = newPriceBUp / newPriceBDown;
 
 	// Calculate the amount of tokenB to sell to maintain the target USD value
-	const infinitySellInput = Math.abs(
+	let infinitySellInput = Math.abs(
 		(infinityTarget - currentBalances.balanceB * newPriceBUp) / newPriceBUp
 	); // USD Output, then Div by price to get lamports
-	const infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); // Lamports * Price to get USD Input
-
+	let infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); // Lamports * Price to get USD Input
+	infinitySellInput *= ratio; // Adjust for the ratio
+	infinitySellOutput *= ratio; // Adjust for the ratio
+	
 	// Convert to lamports
 	infinitySellInputLamports = Math.floor(
 		infinitySellInput * Math.pow(10, selectedDecimalsB)
@@ -699,10 +702,12 @@ async function infinityGrid() {
 	Amount of ${selectedTokenA} to receive: ${infinitySellOutput.toFixed(5)} (${infinitySellOutputLamports} lamports)`);
 
 	// Calculate the amount of tokenB to buy to maintain the target USD value
-	const infinityBuyOutput = Math.abs(
+	let infinityBuyOutput = Math.abs(
 		(infinityTarget - currentBalances.balanceB * newPriceBDown) / newPriceBDown
 	); // USD Output, then Div by price to get lamports
-	const infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); // Lamports * Price to get USD Input
+	let infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); // Lamports * Price to get USD Input
+	infinityBuyOutput /= ratio; // Adjust for the ratio
+	infinityBuyInput /= ratio; // Adjust for the ratio
 
 	// Convert to lamports and floor the values
 	infinityBuyOutputLamports = Math.floor(
