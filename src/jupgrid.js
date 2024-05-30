@@ -124,6 +124,8 @@ let {
 	infinitySellInputLamports,
 	infinitySellOutputLamports,
 	counter = 0,
+	lastTip = null,
+	askForRebalance = true,
 	userSettings = {
 		selectedTokenA: null,
 		selectedTokenB: null,
@@ -162,13 +164,13 @@ async function loadQuestion() {
 								const userSettings = loaduserSettings();
 								console.log("User data loaded successfully.");
 								console.log(
-									`Infinity Mode Enabled.
-Token A: ${userSettings.selectedTokenA}
-Token B: ${userSettings.selectedTokenB}
+									`\nPrevious JupGrid Settings:
+Token A: ${chalk.cyan(userSettings.selectedTokenA)}
+Token B: ${chalk.magenta(userSettings.selectedTokenB)}
 Infinity Target: ${userSettings.infinityTarget}
 Spread: ${userSettings.spread}%
 Stop Loss: ${userSettings.stopLossUSD}
-Monitoring delay: ${userSettings.monitorDelay}ms`
+Monitoring delay: ${userSettings.monitorDelay}ms\n`
 								);
 								// Prompt for confirmation to use these settings
 								rl.question(
@@ -258,47 +260,49 @@ async function initialize() {
 
 	tokens = await getTokens();
 
-	if (userSettings.selectedTokenA) {
-		const tokenAExists = tokens.some(
-			(token) => token.symbol === userSettings.selectedTokenA
-		);
-		if (!tokenAExists) {
-			console.log(
-				`Token ${userSettings.selectedTokenA} from user data not found in the updated token list. Please re-enter.`
-			);
-			userSettings.selectedTokenA = null; // Reset selected token A
-			userSettings.selectedAddressA = null; // Reset selected address
-			userSettings.selectedDecimalsA = null; // Reset selected token decimals
-		} else {
-			validTokenA = true;
-		}
-	}
+	console.log("During this Beta stage, we are only allowing USDC as Token A. Is that ok?");
 
-	while (!validTokenA) {
-		const answer = await questionAsync(
-			`Please Enter The First Token Symbol (A) (Case Sensitive): `
-		);
-		const token = tokens.find((t) => t.symbol === answer);
-		if (token) {
-			console.log(`Selected Token: ${token.symbol}
+// Simulate the user entered 'USDC' as their answer
+const answer = 'USDC';
+
+if (userSettings.selectedTokenA) {
+  const tokenAExists = tokens.some(
+    (token) => token.symbol === userSettings.selectedTokenA
+  );
+  if (!tokenAExists) {
+    console.log(
+      `Token ${userSettings.selectedTokenA} from user data not found in the updated token list. Please re-enter.`
+    );
+    userSettings.selectedTokenA = null; // Reset selected token A
+    userSettings.selectedAddressA = null; // Reset selected address
+    userSettings.selectedDecimalsA = null; // Reset selected token decimals
+  } else {
+    validTokenA = true;
+  }
+}
+
+while (!validTokenA) {
+  const token = tokens.find((t) => t.symbol === answer);
+  if (token) {
+    console.log(`Selected Token: ${token.symbol}
 Token Address: ${token.address}
 Token Decimals: ${token.decimals}`);
-			const confirmAnswer = await questionAsync(
-				`Is this the correct token? (Y/N): `
-			);
-			if (
-				confirmAnswer.toLowerCase() === "y" ||
-				confirmAnswer.toLowerCase() === "yes"
-			) {
-				validTokenA = true;
-				selectedTokenA = token.symbol;
-				selectedAddressA = token.address;
-				selectedDecimalsA = token.decimals;
-			}
-		} else {
-			console.log(`Token ${answer} not found. Please Try Again.`);
-		}
-	}
+    const confirmAnswer = await questionAsync(
+      `Is this the correct token? (Y/N): `
+    );
+    if (
+      confirmAnswer.toLowerCase() === "y" ||
+      confirmAnswer.toLowerCase() === "yes"
+    ) {
+      validTokenA = true;
+      selectedTokenA = token.symbol;
+      selectedAddressA = token.address;
+      selectedDecimalsA = token.decimals;
+    }
+  } else {
+    console.log(`Token ${answer} not found. Please Try Again.`);
+  }
+}
 
 	if (userSettings.selectedTokenB) {
 		const tokenBExists = tokens.some(
@@ -432,7 +436,7 @@ Token Decimals: ${token.decimals}`);
 	}
 
 	spreadbps = spread * 100;
-	rl.close(); // Close the readline interface after question loops are done.
+	//rl.close(); // Close the readline interface after question loops are done.
 
 	saveuserSettings(
 		selectedTokenA,
@@ -461,9 +465,9 @@ Token Decimals: ${token.decimals}`);
 	startPrice = response.data.outAmount;
 
 	console.clear();
-	console.log(`Starting JupGrid Infinity Mode
-Your Token Selection for A - Symbol: ${selectedTokenA}, Address: ${selectedAddressA}
-Your Token Selection for B - Symbol: ${selectedTokenB}, Address: ${selectedAddressB}`);
+	console.log(`Starting JupGrid v${version}
+Your Token Selection for A - Symbol: ${chalk.cyan(selectedTokenA)}, Address: ${chalk.cyan(selectedAddressA)}
+Your Token Selection for B - Symbol: ${chalk.magenta(selectedTokenB)}, Address: ${chalk.magenta(selectedAddressB)}`);
 	startInfinity();
 }
 
@@ -486,7 +490,6 @@ async function startInfinity() {
 	initBalanceB = initialBalances.balanceB;
 	initUsdBalanceB = initialBalances.usdBalanceB;
 	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
-	console.log(`Rebalancing your portfolio...`);
 	await jitoController("rebalance");
 	infinityGrid();
 }
@@ -950,26 +953,34 @@ function encodeTransactionToBase58(transaction) {
 }
 
 async function jitoTipCheck() {
-	return fetch(
+	try {
+	  const response = await fetch(
 		"https://jito-labs.metabaseapp.com/api/public/dashboard/016d4d60-e168-4a8f-93c7-4cd5ec6c7c8d/dashcard/154/card/188?parameters=%5B%5D"
-	)
-		.then((response) => response.json())
-		.then((json) => json.data.rows[0])
-		.then((row) => {
-			const data = {
-				time: row[0],
-				landed_tips_25th_percentile_sol: Number(row[1].toFixed(8)),
-				landed_tips_50th_percentile_sol: Number(row[2].toFixed(8)),
-				landed_tips_75th_percentile_sol: Number(row[3].toFixed(8)),
-				landed_tips_95th_percentile_sol: Number(row[4].toFixed(8)),
-				landed_tips_99th_percentile_sol: Number(row[5].toFixed(8)),
-				ema_landed_tips_50th_percentile: Number(row[6].toFixed(8))
-			};
-			// console.table(data);
-			return data;
-		})
-		.catch((err) => console.error(err));
-}
+	  );
+	  if (!response.ok) {
+		console.log('Fetch request failed, using default tip value of 0.00005 SOL');
+		return 0.00005;
+	  }
+	  let json;
+	  try {
+		json = await response.json();
+	  } catch (err) {
+		console.log('Invalid JSON response, using default tip value of 0.00005 SOL');
+		return 0.00005;
+	  }
+	  const row = json.data.rows[0];
+	  const tipVal = Number(row[6].toFixed(8));
+	  if (isNaN(tipVal)) {
+		console.error('Invalid tip value:', tipVal);
+		throw new Error('Invalid tip value');
+	  }
+	  lastTip = tipVal;
+	  return tipVal;
+	} catch (err) {
+	  console.error(err);
+	  return lastTip !== null ? lastTip : 0.00005; // Return a default of 50000 lamports if the request fails
+	}
+  }
 
 async function jitoController(task) {
 	let result = "unknown";
@@ -994,7 +1005,8 @@ async function jitoController(task) {
 	while (jitoRetry < 20) {
 		switch (result) {
 		case "succeed":
-			console.log("Operation Succeeded");
+			console.log("Operation Succeeded\n");
+
 			jitoRetry = 21;
 			break;
 		case "cancelFail":
@@ -1016,7 +1028,6 @@ async function jitoController(task) {
 			console.log("Unknown Error state. Exiting...");
 			process.exit(0);
 		}
-		console.log("End Jito Controller");
 	}
 }
 
@@ -1088,6 +1099,7 @@ async function jitoSetInfinity(task) {
 
 async function jitoRebalance(task) {
 	const transaction1 = await balanceCheck();
+	rl.close();
 	if (transaction1 === "skip") {
 		console.log("Skipping Rebalance...");
 		return "succeed";
@@ -1097,10 +1109,15 @@ async function jitoRebalance(task) {
 }
 
 async function handleJitoBundle(task, ...transactions) {
-	const jitoData = await jitoTipCheck();
-	const tipValueInSol = jitoData.ema_landed_tips_50th_percentile;
-	const tipValueInLamports = tipValueInSol * 1_000_000_000;
-	const roundedTipValueInLamports = Math.round(tipValueInLamports);
+	let tipValueInSol;
+  try {
+    tipValueInSol = await jitoTipCheck();
+  } catch (err) {
+    console.error(err);
+    tipValueInSol = 0.00005; // Replace 0 with your default value
+  }
+  const tipValueInLamports = tipValueInSol * 1_000_000_000;
+  const roundedTipValueInLamports = Math.round(tipValueInLamports);
 
 	// Limit to 9 digits
 	const limitedTipValueInLamports = Number(
@@ -1116,9 +1133,9 @@ async function handleJitoBundle(task, ...transactions) {
 		});
 		// console.log("Tries: ",retries);
 		console.log(
-			"Jito Fee: ",
+			"Jito Fee:",
 			limitedTipValueInLamports / Math.pow(10, 9),
-			" SOL"
+			"SOL"
 		);
 		instructionsSub.push(tipIxn);
 		const resp = await connection.getLatestBlockhash("confirmed");
@@ -1158,7 +1175,6 @@ async function sendJitoBundle(task, bundletoSend) {
 	);
 	await checkOpenOrders();
 	const preBundleOrders = checkArray;
-	console.log(`Pre Bundle Orders: ${preBundleOrders}`)
 	// console.log(`PreJitoA: ${preJitoA}`);
 	// console.log(`PreJitoB: ${preJitoB}`);
 
@@ -1309,7 +1325,7 @@ async function rebalanceTokens(
 ) {
 	if (shutDown) return;
 	const rebalanceLamports = Math.floor(rebalanceValue);
-	console.log(`Rebalancing Tokens ${selectedTokenA} and ${selectedTokenB}`);
+	console.log(`Rebalancing Tokens ${chalk.cyan(selectedTokenA)} and ${chalk.magenta(selectedTokenB)}`);
 
 	try {
 		// Fetch the quote
@@ -1402,18 +1418,15 @@ async function cancelOrder(target) {
 }
 
 async function balanceCheck() {
-	// Update balances and profits
-	console.log("Checking Balances");
+	console.log("Checking Portfolio, we will rebalance if necessary.");
 	const currentBalances = await getBalance(
-		payer,
-		selectedAddressA,
-		selectedAddressB,
-		selectedTokenA,
-		selectedTokenB
+	  payer,
+	  selectedAddressA,
+	  selectedAddressB,
+	  selectedTokenA,
+	  selectedTokenB
 	);
-
-	console.log("Balances Updated");
-	// Calculate profit
+  
 	currBalanceA = currentBalances.balanceA;
 	currBalanceB = currentBalances.balanceB;
 	currUSDBalanceA = currentBalances.usdBalanceA;
@@ -1421,73 +1434,91 @@ async function balanceCheck() {
 	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB;
 	tokenARebalanceValue = currentBalances.tokenARebalanceValue;
 	tokenBRebalanceValue = currentBalances.tokenBRebalanceValue;
-
-	// Rebalancing allowed check
+  
 	if (currUsdTotalBalance < infinityTarget) {
-		console.log(
-			`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`
-		);
-		process.exit(0); // Exit program
+	  console.log(
+		`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`
+	  );
+	  process.exit(0);
 	}
 	const targetUsdBalancePerToken = infinityTarget;
 	const percentageDifference = Math.abs(
-		(currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken
+	  (currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken
 	);
 	if (percentageDifference > 0.01) {
-		if (currUSDBalanceB < targetUsdBalancePerToken) {
-			// Calculate how much more of TokenB we need to reach the target
-			const deficit =
-				(targetUsdBalancePerToken - currUSDBalanceB) *
-				Math.pow(10, selectedDecimalsA);
-
-			// Calculate how much of TokenA we need to sell to buy the deficit amount of TokenB
-			adjustmentA = Math.floor(
-				Math.abs((-1 * deficit) / tokenARebalanceValue)
-			);
-		} else if (currUSDBalanceB > targetUsdBalancePerToken) {
-			// Calculate how much we have exceeded the target
-			const surplus =
-				(currUSDBalanceB - targetUsdBalancePerToken) *
-				Math.pow(10, selectedDecimalsB);
-
-			// Calculate how much of TokenB we need to sell to get rid of the surplus
-			adjustmentB = Math.floor(
-				Math.abs(-1 * (surplus / tokenBRebalanceValue))
-			);
-		}
+	  if (currUSDBalanceB < targetUsdBalancePerToken) {
+		const deficit =
+		  (targetUsdBalancePerToken - currUSDBalanceB) *
+		  Math.pow(10, selectedDecimalsA);
+		adjustmentA = Math.floor(
+		  Math.abs((-1 * deficit) / tokenARebalanceValue)
+		);
+	  } else if (currUSDBalanceB > targetUsdBalancePerToken) {
+		const surplus =
+		  (currUSDBalanceB - targetUsdBalancePerToken) *
+		  Math.pow(10, selectedDecimalsB);
+		adjustmentB = Math.floor(
+		  Math.abs(-1 * (surplus / tokenBRebalanceValue))
+		);
+	  }
 	} else {
-		console.log("Within 1% of target, skipping rebalance");
-		return "skip";
+	  console.log("Token B $ value within 1% of target, skipping rebalance.");
+	  return "skip";
 	}
-	const rebalanceSlippageBPS = 200; // 2% slippage
+	const rebalanceSlippageBPS = 200;
+  
+	const confirmTransaction = async () => {
+		if (!askForRebalance) {
+			return true;
+		}
+		const answer = await questionAsync('Do you want to proceed with this transaction? (Y/n) ');
+		if (answer.toUpperCase() === 'N') {
+		  console.log('Transaction cancelled by user. Closing program.');
+		  process.exit(0);
+		} else {
+			askForRebalance = false;
+		  return true;
+		}
+	  };
+  
 	if (adjustmentA > 0) {
-		// Token A's USD balance is above the target, calculate how much Token A to sell
-		console.log(
-			`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to balance.`
-		);
+	  console.log(
+		`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to ${chalk.magenta(selectedTokenB)} to balance.`
+	  );
+	  const userConfirmation = await confirmTransaction();
+	  if (userConfirmation) {
 		const rebalanceTx = await rebalanceTokens(
-			selectedAddressA,
-			selectedAddressB,
-			adjustmentA,
-			rebalanceSlippageBPS,
-			quoteurl
+		  selectedAddressA,
+		  selectedAddressB,
+		  adjustmentA,
+		  rebalanceSlippageBPS,
+		  quoteurl
 		);
 		return rebalanceTx;
+	  } else {
+		console.log('Transaction cancelled by user.');
+		return;
+	  }
 	} else if (adjustmentB > 0) {
-		// Token B's USD balance is above the target, calculate how much Token B to sell
-		console.log(
-			`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to balance.`
-		);
+	  console.log(
+		`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to ${chalk.cyan(selectedTokenA)} to balance.`
+	  );
+	  const userConfirmation = await confirmTransaction();
+	  if (userConfirmation) {
 		const rebalanceTx = await rebalanceTokens(
-			selectedAddressB,
-			selectedAddressA,
-			adjustmentB,
-			rebalanceSlippageBPS,
-			quoteurl
+		  selectedAddressB,
+		  selectedAddressA,
+		  adjustmentB,
+		  rebalanceSlippageBPS,
+		  quoteurl
 		);
 		return rebalanceTx;
+	  } else {
+		console.log('Transaction cancelled by user.');
+		return;
+	  }
 	}
-}
+  }
 
 process.on("SIGINT", () => {
 	console.log("\nCTRL+C detected! Performing cleanup...");
