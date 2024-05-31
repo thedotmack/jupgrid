@@ -643,7 +643,9 @@ async function fetchPrice() {
 
 async function infinityGrid() {
 	if (shutDown) return;
+	counter++;
 	await jitoController("cancel");
+	await jitoController("rebalance");
 	const currentBalances = await getBalance(
 		payer,
 		selectedAddressA,
@@ -729,7 +731,7 @@ async function infinityGrid() {
 	console.log(infinitySellInputLamports);
 	console.log(infinitySellOutputLamports);
 
-	counter++;
+	
 	await jitoController("infinity");
 	console.log(
 		"Pause for 5 seconds to allow orders to finalize on blockchain.",
@@ -1445,7 +1447,7 @@ async function balanceCheck() {
 	const percentageDifference = Math.abs(
 	  (currUSDBalanceB - targetUsdBalancePerToken) / targetUsdBalancePerToken
 	);
-	if (percentageDifference > 0.01) {
+	if (percentageDifference > 0.03) {
 	  if (currUSDBalanceB < targetUsdBalancePerToken) {
 		const deficit =
 		  (targetUsdBalancePerToken - currUSDBalanceB) *
@@ -1462,7 +1464,7 @@ async function balanceCheck() {
 		);
 	  }
 	} else {
-	  console.log("Token B $ value within 1% of target, skipping rebalance.");
+	  console.log("Token B $ value within 3% of target, skipping rebalance.");
 	  return "skip";
 	}
 	const rebalanceSlippageBPS = 200;
