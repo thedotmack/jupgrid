@@ -1045,6 +1045,10 @@ async function jitoCancelOrder(task) {
 	} else {
 		console.log("Cancelling Orders");
 		const transaction1 = await cancelOrder(checkArray, payer);
+		if (transaction1 === "skip") {
+			console.log("Skipping Cancel...");
+			return "succeed";
+		}
 		const result = await handleJitoBundle(task, transaction1);
 		return result;
 	}
@@ -1390,36 +1394,48 @@ async function checkOpenOrders() {
 	checkArray = openOrders.map((order) => order.publicKey.toString());
 }
 
-async function cancelOrder(target) {
-	console.log(target);
-	const requestData = {
-		owner: payer.publicKey.toString(),
-		feePayer: payer.publicKey.toString(),
-		orders: Array.from(target)
-	};
+async function cancelOrder(target, retryCount = 10) {
+    for (let i = 0; i < retryCount; i++) {
+		if (target.length === 0) {
+			console.log("No orders to cancel.");
+			return "skip";
+		}
+		console.log(target);
+    	const requestData = {
+        owner: payer.publicKey.toString(),
+        feePayer: payer.publicKey.toString(),
+        orders: Array.from(target)
+    };
+        try {
+            const response = await fetch("https://jup.ag/api/limit/v1/cancelOrders", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(requestData)
+            });
 
-	const response = await fetch("https://jup.ag/api/limit/v1/cancelOrders", {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json"
-		},
-		body: JSON.stringify(requestData)
-	});
+            if (!response.ok) {
+                console.log("Bad Cancel Order Request");
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
 
-	if (!response.ok) {
-		console.log("Bad Cancel Order Request");
-		throw new Error(`HTTP error! Status: ${response.status}`);
-	}
+            const responseData = await response.json();
+            const transactionBase64 = responseData.tx;
+            const transactionBuf = Buffer.from(transactionBase64, "base64");
+            const transaction = solanaWeb3.Transaction.from(transactionBuf);
 
-	const responseData = await response.json();
-	const transactionBase64 = responseData.tx;
-	const transactionBuf = Buffer.from(transactionBase64, "base64");
-	const transaction = solanaWeb3.Transaction.from(transactionBuf);
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+            transaction.sign(payer);
+            return transaction;
+        } catch (error) {
+            if (i === retryCount - 1) throw error; // If last retry, throw error
+            console.log(`Attempt ${i + 1} failed. Retrying...`);
 
-	const { blockhash } = await connection.getLatestBlockhash();
-	transaction.recentBlockhash = blockhash;
-	transaction.sign(payer);
-	return transaction;
+			target = await checkOpenOrders();
+        }
+    }
 }
 
 async function balanceCheck() {
