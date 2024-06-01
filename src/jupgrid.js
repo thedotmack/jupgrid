@@ -646,6 +646,7 @@ async function infinityGrid() {
 	counter++;
 	await jitoController("cancel");
 	await jitoController("rebalance");
+	askForRebalance = false;
 	const currentBalances = await getBalance(
 		payer,
 		selectedAddressA,
