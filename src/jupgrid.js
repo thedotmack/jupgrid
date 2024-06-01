@@ -875,9 +875,9 @@ Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalan
 -
 Trades: ${counter}
 -
-Buy Order Price: ${newPriceBUp.toFixed(5)}
-Current Price: ${displayPrice.toFixed(5)}
-Sell Order Price: ${newPriceBDown.toFixed(5)}\n`);
+Buy Order Price: ${newPriceBUp.toFixed(9)}
+Current Price: ${displayPrice.toFixed(9)}
+Sell Order Price: ${newPriceBDown.toFixed(9)}\n`);
 }
 
 async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
