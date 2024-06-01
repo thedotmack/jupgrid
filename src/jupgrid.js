@@ -1105,7 +1105,6 @@ async function jitoSetInfinity(task) {
 
 async function jitoRebalance(task) {
 	const transaction1 = await balanceCheck();
-	rl.close();
 	if (transaction1 === "skip") {
 		console.log("Skipping Rebalance...");
 		return "succeed";
