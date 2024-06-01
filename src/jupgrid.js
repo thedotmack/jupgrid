@@ -126,6 +126,8 @@ let {
 	counter = 0,
 	lastTip = null,
 	askForRebalance = true,
+	newPriceBUp = null,
+	newPriceBDown = null,
 	userSettings = {
 		selectedTokenA: null,
 		selectedTokenB: null,
@@ -260,16 +262,11 @@ async function initialize() {
 
 	tokens = await getTokens();
 
-	console.log("During this Beta stage, we are only allowing USDC as Token A. Is that ok?");
-
-// Simulate the user entered 'USDC' as their answer
-const answer = 'USDC';
-
-if (userSettings.selectedTokenA) {
-  const tokenAExists = tokens.some(
+	if (userSettings.selectedTokenA) {
+  	const tokenAExists = tokens.some(
     (token) => token.symbol === userSettings.selectedTokenA
-  );
-  if (!tokenAExists) {
+  	);
+  	if (!tokenAExists) {
     console.log(
       `Token ${userSettings.selectedTokenA} from user data not found in the updated token list. Please re-enter.`
     );
@@ -282,6 +279,10 @@ if (userSettings.selectedTokenA) {
 }
 
 while (!validTokenA) {
+	console.log("During this Beta stage, we are only allowing USDC as Token A. Is that ok?");
+	// Simulate the user entered 'USDC' as their answer
+	const answer = 'USDC';
+
   const token = tokens.find((t) => t.symbol === answer);
   if (token) {
     console.log(`Selected Token: ${token.symbol}
@@ -490,7 +491,6 @@ async function startInfinity() {
 	initBalanceB = initialBalances.balanceB;
 	initUsdBalanceB = initialBalances.usdBalanceB;
 	initUsdTotalBalance = initUsdBalanceA + initUsdBalanceB;
-	await jitoController("rebalance");
 	infinityGrid();
 }
 
@@ -664,11 +664,11 @@ async function infinityGrid() {
 	const priceResponse =
 		response.data.outAmount / Math.pow(10, selectedDecimalsA);
 
-	//currBalanceA = currentBalances.balanceA; // Current balance of token A
-	//currBalanceB = currentBalances.balanceB; // Current balance of token B
-	//currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
-	//currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
-	//currUsdTotalBalance = currentBalances.usdBalanceA + currentBalances.usdBalanceB; // Current total USD balance
+	currBalanceA = currentBalances.balanceA; // Current balance of token A
+	currBalanceB = currentBalances.balanceB; // Current balance of token B
+	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
+	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
+	currUsdTotalBalance = currentBalances.usdBalanceA + currentBalances.usdBalanceB; // Current total USD balance
 
 	if (currUsdTotalBalance < stopLossUSD) {
 		// Emergency Stop Loss
@@ -678,8 +678,8 @@ async function infinityGrid() {
 		process.kill(process.pid, "SIGINT");
 	}
 	// Calculate the new prices of tokenB when it's up 1% and down 1%
-	const newPriceBUp = priceResponse * (1 + spreadbps / 10000);
-	const newPriceBDown = priceResponse * (1 - spreadbps / 10000);
+	newPriceBUp = priceResponse * (1 + spreadbps / 10000);
+	newPriceBDown = priceResponse * (1 - spreadbps / 10000);
 	const ratio = newPriceBUp / newPriceBDown;
 
 	// Calculate the amount of tokenB to sell to maintain the target USD value
@@ -806,9 +806,9 @@ async function updateMainDisplay() {
 	formatElapsedTime(startTime);
 	console.log(`-`);
 	console.log(
-		`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}`
+		`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}\n\u{2B65} Spread: ${spread}%\n\u{1F55A} Monitor Delay: ${monitorDelay}ms`
 	);
-
+	let displayPrice
 	try {
 		// Attempt to fetch the new USD values
 		const tempUSDBalanceA = await updateUSDVal(
@@ -834,6 +834,7 @@ async function updateMainDisplay() {
 		};
 		const response = await axios.get(quoteurl, { params: queryParams });
 		newPrice = response.data.outAmount;
+		displayPrice = newPrice / Math.pow(10, selectedDecimalsA);
 	} catch (error) {
 		// Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
@@ -865,15 +866,17 @@ Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
 	console.log(`Market Change: ${(((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
 Performance Delta: ${(percentageChange - ((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
 -
-Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))}
-Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))}
+Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))} (Change: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))})
+Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))} (Change: ${chalk.magenta((currBalanceB - initBalanceB).toFixed(5))})
 -
 Starting Balance A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(initBalanceA.toFixed(5))}
 Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalanceB.toFixed(5))}
 -
-Balance Change A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))}
-Balance Change B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta((currBalanceB - initBalanceB).toFixed(5))}
-Trades: ${counter}`);
+Trades: ${counter}
+-
+Buy Order Price: ${newPriceBUp.toFixed(5)}
+Current Price: ${displayPrice.toFixed(5)}
+Sell Order Price: ${newPriceBDown.toFixed(5)}\n`);
 }
 
 async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
