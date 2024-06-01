@@ -1394,7 +1394,8 @@ async function checkOpenOrders() {
 	checkArray = openOrders.map((order) => order.publicKey.toString());
 }
 
-async function cancelOrder(target, retryCount = 10) {
+async function cancelOrder(target, payer) {
+	const retryCount = 10;
     for (let i = 0; i < retryCount; i++) {
 		if (target.length === 0) {
 			console.log("No orders to cancel.");
