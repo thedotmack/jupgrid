@@ -635,112 +635,6 @@ function formatElapsedTime(startTime) {
 	console.log(`\u{23F1}  Run time: ${hours}:${minutes}:${seconds}`);
 }
 
-async function fetchPrice() {
-    const response = await axios.get('https://price.jup.ag/v6/price?ids=SOL');
-    const price = response.data.data.SOL.price;
-    return parseFloat(price.toFixed(2));
-}
-
-async function infinityGrid() {
-	if (shutDown) return;
-	counter++;
-	await jitoController("cancel");
-	await jitoController("rebalance");
-	askForRebalance = false;
-	const currentBalances = await getBalance(
-		payer,
-		selectedAddressA,
-		selectedAddressB,
-		selectedTokenA,
-		selectedTokenB
-	);
-	tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
-	const queryParams = {
-		inputMint: selectedAddressB,
-		outputMint: selectedAddressA,
-		amount: tradeSizeInLamports,
-		slippageBps: 0
-	};
-	const response = await axios.get(quoteurl, { params: queryParams });
-	const priceResponse =
-		response.data.outAmount / Math.pow(10, selectedDecimalsA);
-
-	currBalanceA = currentBalances.balanceA; // Current balance of token A
-	currBalanceB = currentBalances.balanceB; // Current balance of token B
-	currUSDBalanceA = currentBalances.usdBalanceA; // Current USD balance of token A
-	currUSDBalanceB = currentBalances.usdBalanceB; // Current USD balance of token B
-	currUsdTotalBalance = currentBalances.usdBalanceA + currentBalances.usdBalanceB; // Current total USD balance
-
-	if (currUsdTotalBalance < stopLossUSD) {
-		// Emergency Stop Loss
-		console.clear();
-		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
-		stopLoss = true;
-		process.kill(process.pid, "SIGINT");
-	}
-	// Calculate the new prices of tokenB when it's up 1% and down 1%
-	newPriceBUp = priceResponse * (1 + spreadbps / 10000);
-	newPriceBDown = priceResponse * (1 - spreadbps / 10000);
-	const ratio = newPriceBUp / newPriceBDown;
-
-	// Calculate the amount of tokenB to sell to maintain the target USD value
-	let infinitySellInput = Math.abs(
-		(infinityTarget - currentBalances.balanceB * newPriceBUp) / newPriceBUp
-	); // USD Output, then Div by price to get lamports
-	let infinitySellOutput = Math.abs(infinitySellInput * newPriceBUp); // Lamports * Price to get USD Input
-	infinitySellInput *= ratio; // Adjust for the ratio
-	infinitySellOutput *= ratio; // Adjust for the ratio
-	
-	// Convert to lamports
-	infinitySellInputLamports = Math.floor(
-		infinitySellInput * Math.pow(10, selectedDecimalsB)
-	);
-	infinitySellOutputLamports = Math.floor(
-		infinitySellOutput * Math.pow(10, selectedDecimalsA)
-	);
-
-	console.log(`Current Market Price: ${priceResponse.toFixed(5)}
-	Infinity Target: ${infinityTarget}
-	Current ${selectedTokenB} Balance: ${currentBalances.balanceB} (${currentBalances.usdBalanceB.toFixed(2)})
-
-	${selectedTokenB} up ${spread}%: ${newPriceBUp.toFixed(5)}
-	Amount of ${selectedTokenB} to send: ${infinitySellInput.toFixed(5)} (${infinitySellInputLamports} lamports)
-	Amount of ${selectedTokenA} to receive: ${infinitySellOutput.toFixed(5)} (${infinitySellOutputLamports} lamports)`);
-
-	// Calculate the amount of tokenB to buy to maintain the target USD value
-	let infinityBuyOutput = Math.abs(
-		(infinityTarget - currentBalances.balanceB * newPriceBDown) / newPriceBDown
-	); // USD Output, then Div by price to get lamports
-	let infinityBuyInput = Math.abs(infinityBuyOutput * newPriceBDown); // Lamports * Price to get USD Input
-	infinityBuyOutput /= ratio; // Adjust for the ratio
-	infinityBuyInput /= ratio; // Adjust for the ratio
-
-	// Convert to lamports and floor the values
-	infinityBuyOutputLamports = Math.floor(
-		infinityBuyOutput * Math.pow(10, selectedDecimalsB)
-	);
-	infinityBuyInputLamports = Math.floor(
-		infinityBuyInput * Math.pow(10, selectedDecimalsA)
-	);
-
-	console.log(`\n${selectedTokenB} down ${spread}%: ${newPriceBDown.toFixed(5)}
-	Amount of ${selectedTokenB} to send: ${infinityBuyOutput.toFixed(5)} (${infinityBuyOutputLamports} lamports)
-	Amount of ${selectedTokenA} to receive: ${infinityBuyInput.toFixed(5)} (${infinityBuyInputLamports} lamports)`);
-
-	console.log(infinityBuyInputLamports);
-	console.log(infinityBuyOutputLamports);
-	console.log(infinitySellInputLamports);
-	console.log(infinitySellOutputLamports);
-
-	
-	await jitoController("infinity");
-	console.log(
-		"Pause for 5 seconds to allow orders to finalize on blockchain.",
-		await delay(5000)
-	);
-	monitor();
-}
-
 async function monitor() {
 	if (shutDown) return;
 	const maxRetries = 5;
@@ -776,6 +670,112 @@ async function handleOrders(checkArray) {
 		await delay(monitorDelay);
 		await monitor();
 	}
+}
+
+async function infinityGrid() {
+	if (shutDown) return;
+
+	// Increment trades counter
+	counter++;
+
+	// Cancel any existing orders
+	await jitoController("cancel");
+
+	// Check to see if we need to rebalance
+	await jitoController("rebalance");
+	askForRebalance = false;
+
+    // Get the current balances
+    const { balanceA, balanceB } = await getBalance(payer, selectedAddressA, selectedAddressB, selectedTokenA, selectedTokenB);
+    let balanceALamports = balanceA * Math.pow(10, selectedDecimalsA);
+    let balanceBLamports = balanceB * Math.pow(10, selectedDecimalsB);
+
+    // Get the current market price
+    const marketPrice = await fetchPrice(selectedAddressB);
+    currUsdTotalBalance = balanceA + (balanceB * marketPrice);
+	console.log(`Current USD Total Balance: ${currUsdTotalBalance}`)
+
+	// Emergency Stop Loss
+	if (currUsdTotalBalance < stopLossUSD) {
+		console.clear();
+		console.log(`\n\u{1F6A8} Emergency Stop Loss Triggered! - Exiting`);
+		stopLoss = true;
+		process.kill(process.pid, "SIGINT");
+	}
+    // Calculate the new prices of tokenB when it's up and down by the spread%
+    newPriceBUp = marketPrice * (1 + spreadbps / 10000);
+    newPriceBDown = marketPrice * (1 - spreadbps / 10000);
+    
+    // Calculate the current value of TokenB in USD
+    const currentValueUSD = balanceBLamports / Math.pow(10, selectedDecimalsB) * marketPrice;
+    
+    // Calculate the target value of TokenB in USD at the new prices
+    const targetValueUSDUp = balanceBLamports / Math.pow(10, selectedDecimalsB) * newPriceBUp;
+    const targetValueUSDDown = balanceBLamports / Math.pow(10, selectedDecimalsB) * newPriceBDown;
+    
+    // Calculate the initial lamports to sell and buy
+    let lamportsToSellInitial = Math.floor((targetValueUSDUp - infinityTarget) / newPriceBUp * Math.pow(10, selectedDecimalsB));
+    let lamportsToBuyInitial = Math.floor((infinityTarget - targetValueUSDDown) / newPriceBDown * Math.pow(10, selectedDecimalsB));
+
+    // Adjust the lamports to buy based on the potential cancellation of the sell order
+    let lamportsToBuy = lamportsToBuyInitial - lamportsToSellInitial;
+
+    // lamportsToSell remains the same as lamportsToSellInitial
+    let lamportsToSell = lamportsToSellInitial;
+
+    // Calculate the expected USDC for the sell and buy
+	const decimalDiff = selectedDecimalsB - selectedDecimalsA;
+    const expectedUSDCForSell = (lamportsToSell * newPriceBUp) / Math.pow(10, selectedDecimalsB);
+    const expectedUSDCForBuy = (lamportsToBuy * newPriceBDown) / Math.pow(10, selectedDecimalsB);
+    const expectedUSDCForSellLamports = Math.floor((lamportsToSell * newPriceBUp) / Math.pow(10, decimalDiff));
+	const expectedUSDCForBuyLamports = Math.floor((lamportsToBuy * newPriceBDown) / Math.pow(10, decimalDiff));
+
+    // Derive the MarketUp and MarketDown prices from the lamports to buy/sell
+    const derivedMarketPriceUp = expectedUSDCForSellLamports / lamportsToSell;
+    const derivedMarketPriceDown = expectedUSDCForBuyLamports / lamportsToBuy;
+
+	infinityBuyInputLamports = expectedUSDCForBuyLamports;
+	infinityBuyOutputLamports = lamportsToBuy;
+	infinitySellInputLamports = lamportsToSell;
+	infinitySellOutputLamports = expectedUSDCForSellLamports;
+
+    // Log the values
+    console.log(`TokenA Balance: ${balanceA}`);
+    console.log(`TokenA Balance Lamports: ${balanceALamports}`);
+    console.log(`TokenB Balance: ${balanceB}`);
+    console.log(`TokenB Balance Lamports: ${balanceBLamports}`);
+    console.log(`TokenB Balance USD: ${currentValueUSD}`);
+    console.log(`Infinity Target: ${infinityTarget}`);
+    console.log(`Market Price: ${marketPrice.toFixed(2)}`);
+    console.log(`Market Price Up: ${newPriceBUp.toFixed(2)}`);
+    console.log(`Derived Market Price Up: ${derivedMarketPriceUp.toFixed(2)}`);
+    console.log(`Market Price Down: ${newPriceBDown.toFixed(2)}`);
+    console.log(`Derived Market Price Down: ${derivedMarketPriceDown.toFixed(2)}`);
+    console.log(`Target Value of TokenB in USD Up: ${targetValueUSDUp}`);
+    console.log(`Target Value of TokenB in USD Down: ${targetValueUSDDown}`);
+    console.log(`Lamports to Sell: ${lamportsToSell}`);
+    console.log(`Expected USDC for Sell: ${expectedUSDCForSell}`);
+    console.log(`USDC Lamports for Sell ${expectedUSDCForSellLamports}`);
+    console.log(`Lamports to Buy: ${lamportsToBuy}`);
+    console.log(`Expected USDC for Buy: ${expectedUSDCForBuy}`);
+    console.log(`USDC Lamports for Buy ${expectedUSDCForBuyLamports}\n`);
+	console.log(`New Inf Version: ${infinityBuyInputLamports}`);
+	console.log(`New Inf Version: ${infinityBuyOutputLamports}`);
+	console.log(`New Inf Version: ${infinitySellInputLamports}`);
+	console.log(`New Inf Version: ${infinitySellOutputLamports}`);
+
+	await jitoController("infinity");
+	console.log(
+		"Pause for 5 seconds to allow orders to finalize on blockchain.",
+		await delay(5000)
+	);
+	monitor();
+}
+
+async function fetchPrice(tokenId) {
+    const response = await axios.get(`https://price.jup.ag/v6/price?ids=${tokenId}`);
+    const price = response.data.data[tokenId].price;
+    return parseFloat(price);
 }
 
 async function updateUSDVal(mintAddress, balance, decimals) {
@@ -986,7 +986,7 @@ async function jitoTipCheck() {
 	  console.error(err);
 	  return lastTip !== null ? lastTip : 0.00005; // Return a default of 50000 lamports if the request fails
 	}
-  }
+}
 
 async function jitoController(task) {
 	let result = "unknown";
@@ -1540,7 +1540,7 @@ async function balanceCheck() {
 		return;
 	  }
 	}
-  }
+}
 
 process.on("SIGINT", () => {
 	console.log("\nCTRL+C detected! Performing cleanup...");
