@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import fetch from 'cross-fetch';
 import * as fs from 'fs';
 import ora from 'ora';
+import Websocket from 'ws';
 
 import {
 	LimitOrderProvider,
@@ -34,6 +35,7 @@ import {
 	questionAsync,
 	rl
 } from './utils.js';
+import { token } from '@project-serum/anchor/dist/cjs/utils/index.js';
 
 // #endregion
 
@@ -453,17 +455,8 @@ Token Decimals: ${token.decimals}`);
 	);
 	// First Price check during init
 	console.log("Getting Latest Price Data...");
-	tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
-	const queryParams = {
-		inputMint: selectedAddressB,
-		outputMint: selectedAddressA,
-		amount: tradeSizeInLamports,
-		slippageBps: 0
-	};
-	const response = await axios.get(quoteurl, { params: queryParams });
-
-	newPrice = response.data.outAmount;
-	startPrice = response.data.outAmount;
+	newPrice = await fetchPrice(selectedAddressB);
+	startPrice = newPrice;
 
 	console.clear();
 	console.log(`Starting JupGrid v${version}
@@ -734,12 +727,24 @@ async function infinityGrid() {
     const derivedMarketPriceUp = expectedUSDCForSellLamports / lamportsToSell;
     const derivedMarketPriceDown = expectedUSDCForBuyLamports / lamportsToBuy;
 
+	//Translate variables to be used for jitoController
 	infinityBuyInputLamports = expectedUSDCForBuyLamports;
 	infinityBuyOutputLamports = lamportsToBuy;
 	infinitySellInputLamports = lamportsToSell;
 	infinitySellOutputLamports = expectedUSDCForSellLamports;
 
+	// Check if the balances are enough to place the orders (With a 5% buffer)
+	if (infinitySellInputLamports > balanceBLamports * 1.05) {
+		console.log("Token B Balance not enough to place Sell Order. Exiting.");
+		process.kill(process.pid, "SIGINT");
+	}
+	if (infinityBuyInputLamports > balanceALamports * 1.05) {
+		console.log("Token A Balance not enough to place Buy Order. Exiting.");
+		process.kill(process.pid, "SIGINT");
+	}
     // Log the values
+
+	/*
     console.log(`TokenA Balance: ${balanceA}`);
     console.log(`TokenA Balance Lamports: ${balanceALamports}`);
     console.log(`TokenB Balance: ${balanceB}`);
@@ -759,11 +764,8 @@ async function infinityGrid() {
     console.log(`Lamports to Buy: ${lamportsToBuy}`);
     console.log(`Expected USDC for Buy: ${expectedUSDCForBuy}`);
     console.log(`USDC Lamports for Buy ${expectedUSDCForBuyLamports}\n`);
-	console.log(`New Inf Version: ${infinityBuyInputLamports}`);
-	console.log(`New Inf Version: ${infinityBuyOutputLamports}`);
-	console.log(`New Inf Version: ${infinitySellInputLamports}`);
-	console.log(`New Inf Version: ${infinitySellOutputLamports}`);
-
+	*/
+	
 	await jitoController("infinity");
 	console.log(
 		"Pause for 5 seconds to allow orders to finalize on blockchain.",
@@ -772,30 +774,60 @@ async function infinityGrid() {
 	monitor();
 }
 
-async function fetchPrice(tokenId) {
-    const response = await axios.get(`https://price.jup.ag/v6/price?ids=${tokenId}`);
-    const price = response.data.data[tokenId].price;
+async function fetchPrice(tokenAddress) {
+    const response = await axios.get(`https://price.jup.ag/v6/price?ids=${tokenAddress}`);
+    const price = response.data.data[tokenAddress].price;
     return parseFloat(price);
 }
 
 async function updateUSDVal(mintAddress, balance, decimals) {
-	const queryParams = {
-		inputMint: mintAddress,
-		outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-		amount: Math.floor(balance * Math.pow(10, decimals)),
-		slippageBps: 0
-	};
+    try {
+        let price = await fetchPrice(mintAddress);
+        let balanceLamports = Math.floor(balance * Math.pow(10, decimals));
+        const usdBalance = balanceLamports * price;
+        const usdBalanceLamports =usdBalance / Math.pow(10, decimals);
+        return usdBalanceLamports;
+    } catch (error) {
+        // Error is not critical.
+        // Reuse the previous balances and try another update again next cycle.
+    }
+}
 
-	try {
-		const response = await axios.get(quoteurl, {
-			params: queryParams
-		});
-		// Save USD Balance and adjust down for Lamports
-		const usdBalance = response.data.outAmount / Math.pow(10, 6);
-		return usdBalance;
-	} catch (error) {
-		// Error is not critical.
-		// Reuse the previous balances and try another update again next cycle.
+async function fetchNewUSDValues() {
+	const tempUSDBalanceA = await updateUSDVal(
+	  selectedAddressA,
+	  currBalanceA,
+	  selectedDecimalsA
+	);
+	const tempUSDBalanceB = await updateUSDVal(
+	  selectedAddressB,
+	  currBalanceB,
+	  selectedDecimalsB
+	);
+  
+	return {
+	  currUSDBalanceA: tempUSDBalanceA ?? currUSDBalanceA,
+	  currUSDBalanceB: tempUSDBalanceB ?? currUSDBalanceB,
+	};
+}
+
+function calculateProfitOrLoss(currUsdTotalBalance, initUsdTotalBalance) {
+	const profitOrLoss = currUsdTotalBalance - initUsdTotalBalance;
+	const percentageChange = (profitOrLoss / initUsdTotalBalance) * 100;
+	return { profitOrLoss, percentageChange };
+}
+  
+function displayProfitOrLoss(profitOrLoss, percentageChange) {
+	if (profitOrLoss > 0) {
+	  console.log(
+		`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (+${percentageChange.toFixed(2)}%)`)}`
+	  );
+	} else if (profitOrLoss < 0) {
+	  console.log(
+		`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (-${Math.abs(percentageChange).toFixed(2)}%)`)}`
+	  );
+	} else {
+	  console.log(`Difference : $${profitOrLoss.toFixed(2)} (0.00%)`); // Neutral
 	}
 }
 
@@ -807,64 +839,36 @@ async function updateMainDisplay() {
 	formatElapsedTime(startTime);
 	console.log(`-`);
 	console.log(
-		`\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}\n\u{2B65} Spread: ${spread}%\n\u{1F55A} Monitor Delay: ${monitorDelay}ms`
+	  `\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}\n\u{2B65} Spread: ${spread}%\n\u{1F55A} Monitor Delay: ${monitorDelay}ms`
 	);
-	let displayPrice
 	try {
-		// Attempt to fetch the new USD values
-		const tempUSDBalanceA = await updateUSDVal(
-			selectedAddressA,
-			currBalanceA,
-			selectedDecimalsA
-		);
-		const tempUSDBalanceB = await updateUSDVal(
-			selectedAddressB,
-			currBalanceB,
-			selectedDecimalsB
-		);
-
-		currUSDBalanceA = tempUSDBalanceA ?? currUSDBalanceA; // Fallback to current value if undefined
-		currUSDBalanceB = tempUSDBalanceB ?? currUSDBalanceB; // Fallback to current value if undefined
-		currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-		tradeSizeInLamports = 1 * Math.pow(10, selectedDecimalsB);
-		const queryParams = {
-			inputMint: selectedAddressB,
-			outputMint: selectedAddressA,
-			amount: tradeSizeInLamports,
-			slippageBps: 0
-		};
-		const response = await axios.get(quoteurl, { params: queryParams });
-		newPrice = response.data.outAmount;
-		displayPrice = newPrice / Math.pow(10, selectedDecimalsA);
+	  const { currUSDBalanceA, currUSDBalanceB } = await fetchNewUSDValues();
+	  currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
+	  newPrice = await fetchPrice(selectedAddressB);
+	  
 	} catch (error) {
-		// Error is not critical. Reuse the previous balances and try another update again next cycle.
+	  // Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
+  
 	if (currUsdTotalBalance < stopLossUSD) {
-		// Emergency Stop Loss
-		console.clear();
-		console.log(
-			`\n\u{1F6A8} Emergency Stop Loss Triggered! - Cashing out and Exiting`
-		);
-		stopLoss = true;
-		process.kill(process.pid, "SIGINT");
+	  // Emergency Stop Loss
+	  console.clear();
+	  console.log(
+		`\n\u{1F6A8} Emergency Stop Loss Triggered! - Cashing out and Exiting`
+	  );
+	  stopLoss = true;
+	  process.kill(process.pid, "SIGINT");
 	}
+  
 	console.log(`-
 Starting Balance : $${initUsdTotalBalance.toFixed(2)}
 Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
-	const profitOrLoss = currUsdTotalBalance - initUsdTotalBalance;
-	const percentageChange = (profitOrLoss / initUsdTotalBalance) * 100;
-	if (profitOrLoss > 0) {
-		console.log(
-			`Profit : ${chalk.green(`+$${profitOrLoss.toFixed(2)} (+${percentageChange.toFixed(2)}%)`)}`
-		);
-	} else if (profitOrLoss < 0) {
-		console.log(
-			`Loss : ${chalk.red(`-$${Math.abs(profitOrLoss).toFixed(2)} (-${Math.abs(percentageChange).toFixed(2)}%)`)}`
-		);
-	} else {
-		console.log(`Difference : $${profitOrLoss.toFixed(2)} (0.00%)`); // Neutral
-	}
-	console.log(`Market Change: ${(((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
+  
+	const { profitOrLoss, percentageChange } = calculateProfitOrLoss(currUsdTotalBalance, initUsdTotalBalance);
+	displayProfitOrLoss(profitOrLoss, percentageChange);
+  
+	console.log(`Market Change %: ${(((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
+Market Change USD: ${(newPrice - startPrice).toFixed(9)}
 Performance Delta: ${(percentageChange - ((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
 -
 Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))} (Change: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))})
@@ -875,9 +879,9 @@ Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalan
 -
 Trades: ${counter}
 -
-Buy Order Price: ${newPriceBUp.toFixed(9)}
-Current Price: ${displayPrice.toFixed(9)}
-Sell Order Price: ${newPriceBDown.toFixed(9)}\n`);
+Sell Order Price: ${newPriceBUp.toFixed(9)} - Selling ${chalk.magenta(Math.abs(infinitySellInputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinitySellOutputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}
+Current Price: ${newPrice.toFixed(9)}
+Buy Order Price: ${newPriceBDown.toFixed(9)} - Buying ${chalk.magenta(Math.abs(infinityBuyOutputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinityBuyInputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}\n`);
 }
 
 async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
@@ -959,32 +963,58 @@ function encodeTransactionToBase58(transaction) {
 }
 
 async function jitoTipCheck() {
-	try {
-	  const response = await fetch(
-		"https://jito-labs.metabaseapp.com/api/public/dashboard/016d4d60-e168-4a8f-93c7-4cd5ec6c7c8d/dashcard/154/card/188?parameters=%5B%5D"
-	  );
-	  if (!response.ok) {
-		console.log('Fetch request failed, using default tip value of 0.00005 SOL');
-		return 0.00005;
-	  }
-	  let json;
+	const JitoTipWS = 'ws://bundles-api-rest.jito.wtf/api/v1/bundles/tip_stream';
+	const tipws = new Websocket(JitoTipWS);
+	let resolveMessagePromise;
+	let rejectMessagePromise;
+  
+	// Create a promise that resolves with the first message received
+	const messagePromise = new Promise((resolve, reject) => {
+	  resolveMessagePromise = resolve;
+	  rejectMessagePromise = reject;
+	});
+  
+	// Open WebSocket connection
+	tipws.on('open', function open() {
+	});
+  
+	// Handle messages
+	tipws.on('message', function incoming(data) {
+	  const str = data.toString(); // Convert Buffer to string
+  
 	  try {
-		json = await response.json();
+		const json = JSON.parse(str); // Parse string to JSON
+		const percentile50th = json[0].landed_tips_50th_percentile; // Access the 50th percentile property
+  
+		if (percentile50th !== null) {
+		  resolveMessagePromise(percentile50th);
+		} else {
+		  rejectMessagePromise(new Error('50th percentile is null'));
+		}
 	  } catch (err) {
-		console.log('Invalid JSON response, using default tip value of 0.00005 SOL');
-		return 0.00005;
+		rejectMessagePromise(err);
 	  }
-	  const row = json.data.rows[0];
-	  const tipVal = Number(row[6].toFixed(8));
-	  if (isNaN(tipVal)) {
-		console.error('Invalid tip value:', tipVal);
-		throw new Error('Invalid tip value');
-	  }
-	  lastTip = tipVal;
-	  return tipVal;
+	});
+  
+	// Handle errors
+	tipws.on('error', function error(err) {
+	  console.error('WebSocket error:', err);
+	  rejectMessagePromise(err);
+	});
+  
+	try {
+	  // Wait for the first message or a timeout
+	  const percentile50th = await Promise.race([
+		messagePromise,
+		new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+	  ]);
+  
+	  tipws.close(); // Close WebSocket connection
+	  return percentile50th;
 	} catch (err) {
 	  console.error(err);
-	  return lastTip !== null ? lastTip : 0.00005; // Return a default of 50000 lamports if the request fails
+	  tipws.close(); // Close WebSocket connection
+	  return 0.00005; // Return a default of 0.00005 if the request fails
 	}
 }
 
@@ -1129,9 +1159,9 @@ async function handleJitoBundle(task, ...transactions) {
   const roundedTipValueInLamports = Math.round(tipValueInLamports);
 
 	// Limit to 9 digits
-	const limitedTipValueInLamports = Number(
-		roundedTipValueInLamports.toFixed(9)
-	);
+	const limitedTipValueInLamports = Math.floor(
+		Number(roundedTipValueInLamports.toFixed(9)) * 1.1 //+10% of tip to edge out competition
+	  );
 	try {
 		const tipAccount = new PublicKey(getRandomTipAccount());
 		const instructionsSub = [];
@@ -1394,13 +1424,15 @@ async function checkOpenOrders() {
 	checkArray = openOrders.map((order) => order.publicKey.toString());
 }
 
-async function cancelOrder(target, payer) {
+async function cancelOrder(target = [], payer) {
 	const retryCount = 10;
     for (let i = 0; i < retryCount; i++) {
+		/* Commented out for testing.
 		if (target.length === 0) {
 			console.log("No orders to cancel.");
 			return "skip";
 		}
+		*/
 		console.log(target);
     	const requestData = {
         owner: payer.publicKey.toString(),
