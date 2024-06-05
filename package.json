@@ -1,6 +1,6 @@
 {
 	"name": "jup-grid",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"description": "JupGrid",
 	"type": "module",
 	"main": "src/jupgrid.js",
@@ -65,6 +65,7 @@
 		"ora": "^8.0.1",
 		"prompt-sync": "^4.2.0",
 		"readline": "^1.3.0",
+		"winston": "^3.13.0",
 		"ws": "^8.13.0"
 	}
 }

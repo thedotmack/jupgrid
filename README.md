@@ -1,4 +1,4 @@
-## Jupgrid: Decentralized Grid Trading Bot Version 0.5J Beta
+## Jupgrid: Decentralized Grid Trading Bot Version 0.5.1J Beta
 
 =======
 

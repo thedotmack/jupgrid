@@ -35,7 +35,7 @@ import {
 	questionAsync,
 	rl
 } from './utils.js';
-import { token } from '@project-serum/anchor/dist/cjs/utils/index.js';
+import logger from './logger.js';
 
 // #endregion
 
@@ -78,6 +78,19 @@ const SOL_MINT_ADDRESS = "So11111111111111111111111111111111111111112";
 
 const getRandomTipAccount = () =>
 	TIP_ACCOUNTS[Math.floor(Math.random() * TIP_ACCOUNTS.length)];
+
+// Save the original console.log function
+const originalConsoleLog = console.log;
+
+// Override console.log
+console.log = function(message) {
+  // Log the message to the console as usual
+  originalConsoleLog(message);
+
+  // Also log message to the file
+  logger.info(message);
+};
+
 // #endregion
 
 // #region properties
@@ -90,7 +103,6 @@ let {
 	selectedAddressB = null,
 	selectedDecimalsA = null,
 	selectedDecimalsB = null,
-	tradeSizeInLamports = null,
 	validSpread = null,
 	stopLossUSD = null,
 	infinityTarget = null,
@@ -126,10 +138,11 @@ let {
 	infinitySellInputLamports,
 	infinitySellOutputLamports,
 	counter = 0,
-	lastTip = null,
 	askForRebalance = true,
+	rebalanceCounter = 0,
 	newPriceBUp = null,
 	newPriceBDown = null,
+	lastKnownPrice = null,
 	userSettings = {
 		selectedTokenA: null,
 		selectedTokenB: null,
@@ -685,7 +698,12 @@ async function infinityGrid() {
 
     // Get the current market price
     const marketPrice = await fetchPrice(selectedAddressB);
-    currUsdTotalBalance = balanceA + (balanceB * marketPrice);
+	await delay(1000)
+	const marketPrice2 = await fetchPrice(selectedAddressB);
+	await delay(1000)
+	const marketPrice3 = await fetchPrice(selectedAddressB);
+	const averageMarketPrice = (marketPrice + marketPrice2 + marketPrice3) / 3;
+    currUsdTotalBalance = balanceA + (balanceB * averageMarketPrice);
 	console.log(`Current USD Total Balance: ${currUsdTotalBalance}`)
 
 	// Emergency Stop Loss
@@ -696,11 +714,11 @@ async function infinityGrid() {
 		process.kill(process.pid, "SIGINT");
 	}
     // Calculate the new prices of tokenB when it's up and down by the spread%
-    newPriceBUp = marketPrice * (1 + spreadbps / 10000);
-    newPriceBDown = marketPrice * (1 - spreadbps / 10000);
+    newPriceBUp = averageMarketPrice * (1 + spreadbps / 10000);
+    newPriceBDown = averageMarketPrice * (1 - spreadbps / 10000);
     
     // Calculate the current value of TokenB in USD
-    const currentValueUSD = balanceBLamports / Math.pow(10, selectedDecimalsB) * marketPrice;
+    const currentValueUSD = balanceBLamports / Math.pow(10, selectedDecimalsB) * averageMarketPrice;
     
     // Calculate the target value of TokenB in USD at the new prices
     const targetValueUSDUp = balanceBLamports / Math.pow(10, selectedDecimalsB) * newPriceBUp;
@@ -831,6 +849,29 @@ function displayProfitOrLoss(profitOrLoss, percentageChange) {
 	}
 }
 
+async function updatePrice() {
+	let retries = 0;
+	const maxRetries = 5;
+    while (retries < maxRetries) {
+        try {
+            let newPrice = await fetchPrice(selectedAddressB);
+            if(newPrice !== undefined) {
+                lastKnownPrice = newPrice;
+                return newPrice;
+            }
+        } catch (error) {
+            console.error(`Fetch price failed. Attempt ${retries + 1} of ${maxRetries}`);
+        }
+        retries++;
+    }
+
+    if(lastKnownPrice !== null) {
+        return lastKnownPrice;
+    } else {
+        throw new Error("Unable to fetch price and no last known price available");
+    }
+}
+
 async function updateMainDisplay() {
 	console.clear();
 	console.log(`Jupgrid v${version}`);
@@ -844,8 +885,7 @@ async function updateMainDisplay() {
 	try {
 	  const { currUSDBalanceA, currUSDBalanceB } = await fetchNewUSDValues();
 	  currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-	  newPrice = await fetchPrice(selectedAddressB);
-	  
+	  newPrice = await updatePrice(selectedAddressB);
 	} catch (error) {
 	  // Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
@@ -878,6 +918,7 @@ Starting Balance A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(initBalanceA.to
 Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalanceB.toFixed(5))}
 -
 Trades: ${counter}
+Rebalances: ${rebalanceCounter}
 -
 Sell Order Price: ${newPriceBUp.toFixed(9)} - Selling ${chalk.magenta(Math.abs(infinitySellInputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinitySellOutputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}
 Current Price: ${newPrice.toFixed(9)}
@@ -1369,7 +1410,7 @@ async function rebalanceTokens(
 	try {
 		// Fetch the quote
 		const quoteResponse = await axios.get(
-			`${quoteurl}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${rebalanceLamports}&slippageBps=${rebalanceSlippageBPS}`
+			`${quoteurl}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${rebalanceLamports}&autoSlippage=true&maxAutoSlippageBps=200` //slippageBps=${rebalanceSlippageBPS}
 		);
 
 		const swapApiResponse = await fetch(
