@@ -43,8 +43,7 @@ import logger from './logger.js';
 // use fs to to read version from package.json
 const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-const version = packageInfo.version;
-const versionNumber = version
+const currentVersion = packageInfo.version;
 
 const [MIN_WAIT, MAX_WAIT] = [5e2, 5e3];
 
@@ -181,8 +180,8 @@ async function loadQuestion() {
 								// Show user data
 								const userSettings = loaduserSettings();
 								// Check if the saved version matches the current version
-									if (userSettings.versionNumber !== version) {
-										console.log(`Version mismatch detected. Your settings version: ${userSettings.versionNumber}, current version: ${version}.`);
+									if (userSettings.configVersion !== currentVersion) {
+										console.log(`Version mismatch detected. Your settings version: ${userSettings.configVersion}, current version: ${currentVersion}.`);
 										// Here you can choose to automatically initialize with fresh settings
 										// or prompt the user for an action (e.g., update settings, discard, etc.)
 										console.log("Changing to blank settings, please continue.\n");
@@ -192,7 +191,7 @@ async function loadQuestion() {
 								console.log("User data loaded successfully.");
 								console.log(
 									`\nPrevious JupGrid Settings:
-Version: ${userSettings.versionNumber}
+Version: ${userSettings.configVersion}
 Token A: ${chalk.cyan(userSettings.selectedTokenA)}
 Token B: ${chalk.magenta(userSettings.selectedTokenB)}
 Infinity Target: ${userSettings.infinityTarget}
@@ -209,7 +208,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 										if (confirmResponse === "Y") {
 											// Apply loaded settings
 											({
-												versionNumber,
+												configVersion,
 												selectedTokenA,
 												selectedAddressA,
 												selectedDecimalsA,
@@ -265,7 +264,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 }
 
 async function initialize() {
-	if (selectedTokenA === "USDC") {
+	if (selectedTokenA != null) {
 		validTokenA = true;
 	}
 	if (selectedTokenB != null) {
@@ -308,7 +307,7 @@ async function initialize() {
 while (!validTokenA) {
 	console.log("During this Beta stage, we are only allowing USDC as Token A. Is that ok?");
 	// Simulate the user entered 'USDC' as their answer
-	const answer = 'USDC';
+	let answer = 'USDC';
 
   const token = tokens.find((t) => t.symbol === answer);
   if (token) {
@@ -467,7 +466,7 @@ Token Decimals: ${token.decimals}`);
 	//rl.close(); // Close the readline interface after question loops are done.
 
 	saveuserSettings(
-		versionNumber,
+		currentVersion,
 		selectedTokenA,
 		selectedAddressA,
 		selectedDecimalsA,
@@ -485,7 +484,7 @@ Token Decimals: ${token.decimals}`);
 	startPrice = newPrice;
 
 	console.clear();
-	console.log(`Starting JupGrid v${version}
+	console.log(`Starting JupGrid v${currentVersion}
 Your Token Selection for A - Symbol: ${chalk.cyan(selectedTokenA)}, Address: ${chalk.cyan(selectedAddressA)}
 Your Token Selection for B - Symbol: ${chalk.magenta(selectedTokenB)}, Address: ${chalk.magenta(selectedAddressB)}`);
 	startInfinity();
@@ -887,7 +886,7 @@ async function updatePrice() {
 
 async function updateMainDisplay() {
 	console.clear();
-	console.log(`Jupgrid v${version}`);
+	console.log(`Jupgrid v${currentVersion}`);
 	console.log(`\u{267E}  Infinity Mode`);
 	console.log(`\u{1F4B0} Wallet: ${displayAddress}`);
 	formatElapsedTime(startTime);
@@ -1481,12 +1480,10 @@ async function checkOpenOrders() {
 async function cancelOrder(target = [], payer) {
 	const retryCount = 10;
     for (let i = 0; i < retryCount; i++) {
-		/* Commented out for testing.
 		if (target.length === 0) {
 			console.log("No orders to cancel.");
 			return "skip";
 		}
-		*/
 		console.log(target);
     	const requestData = {
         owner: payer.publicKey.toString(),

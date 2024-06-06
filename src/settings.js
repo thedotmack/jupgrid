@@ -91,7 +91,7 @@ function envload() {
 }
 
 function saveuserSettings(
-	versionNumber,
+	configVersion,
 	selectedTokenA,
 	selectedAddressA,
 	selectedDecimalsA,
@@ -108,7 +108,7 @@ function saveuserSettings(
 			"userSettings.json",
 			JSON.stringify(
 				{
-					versionNumber,
+					configVersion,
 					selectedTokenA,
 					selectedAddressA,
 					selectedDecimalsA,
