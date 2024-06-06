@@ -44,6 +44,7 @@ import logger from './logger.js';
 const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 const version = packageInfo.version;
+const versionNumber = version
 
 const [MIN_WAIT, MAX_WAIT] = [5e2, 5e3];
 
@@ -179,9 +180,19 @@ async function loadQuestion() {
 							try {
 								// Show user data
 								const userSettings = loaduserSettings();
+								// Check if the saved version matches the current version
+									if (userSettings.versionNumber !== version) {
+										console.log(`Version mismatch detected. Your settings version: ${userSettings.versionNumber}, current version: ${version}.`);
+										// Here you can choose to automatically initialize with fresh settings
+										// or prompt the user for an action (e.g., update settings, discard, etc.)
+										console.log("Changing to blank settings, please continue.\n");
+										initialize(); // Example action: re-initialize with fresh settings
+										return;
+									}
 								console.log("User data loaded successfully.");
 								console.log(
 									`\nPrevious JupGrid Settings:
+Version: ${userSettings.versionNumber}
 Token A: ${chalk.cyan(userSettings.selectedTokenA)}
 Token B: ${chalk.magenta(userSettings.selectedTokenB)}
 Infinity Target: ${userSettings.infinityTarget}
@@ -198,6 +209,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 										if (confirmResponse === "Y") {
 											// Apply loaded settings
 											({
+												versionNumber,
 												selectedTokenA,
 												selectedAddressA,
 												selectedDecimalsA,
@@ -253,7 +265,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 }
 
 async function initialize() {
-	if (selectedTokenA != null) {
+	if (selectedTokenA === "USDC") {
 		validTokenA = true;
 	}
 	if (selectedTokenB != null) {
@@ -455,6 +467,7 @@ Token Decimals: ${token.decimals}`);
 	//rl.close(); // Close the readline interface after question loops are done.
 
 	saveuserSettings(
+		versionNumber,
 		selectedTokenA,
 		selectedAddressA,
 		selectedDecimalsA,
