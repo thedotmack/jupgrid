@@ -43,7 +43,7 @@ import logger from './logger.js';
 // use fs to to read version from package.json
 const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-const currentVersion = packageInfo.version;
+let currentVersion = packageInfo.version;
 
 const [MIN_WAIT, MAX_WAIT] = [5e2, 5e3];
 
@@ -208,7 +208,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 										if (confirmResponse === "Y") {
 											// Apply loaded settings
 											({
-												configVersion,
+												currentVersion,
 												selectedTokenA,
 												selectedAddressA,
 												selectedDecimalsA,
@@ -1167,6 +1167,8 @@ async function jitoSetInfinity(task) {
 		return result;
 	} else {
 		console.log("Found Orders to Cancel");
+		//Triple check for open orders
+		await checkOpenOrders();
 		const transaction1 = await cancelOrder(checkArray, payer);
 		const order1 = await createTx(
 			infinityBuyInputLamports,
@@ -1225,9 +1227,7 @@ async function handleJitoBundle(task, ...transactions) {
 		});
 		// console.log("Tries: ",retries);
 		console.log(
-			"Jito Fee:",
-			limitedTipValueInLamports / Math.pow(10, 9),
-			"SOL"
+			`Jito Fee: ${limitedTipValueInLamports / Math.pow(10, 9)} SOL`
 		);
 		instructionsSub.push(tipIxn);
 		const resp = await connection.getLatestBlockhash("confirmed");
@@ -1336,7 +1336,7 @@ async function sendJitoBundle(task, bundletoSend) {
 				bundleLanded = true;
 				spinner.stop();
 				console.log(
-					"\nBundle Landed, waiting 30 seconds for orders to finalize..."
+					"\nBundle Landed, waiting for orders to finalize..."
 				);
 				if (task !== "rebalance") {
 					let bundleChecks = 1;
@@ -1364,7 +1364,6 @@ async function sendJitoBundle(task, bundletoSend) {
 				break;
 			}
 			jitoChecks++;
-			await delay(1000);
 		} catch (error) {
 			console.error("Error in balance check:", error);
 		}
@@ -1374,7 +1373,8 @@ async function sendJitoBundle(task, bundletoSend) {
 	if (spinner) {
 		spinner.stop();
 	}
-
+	console.log("Waiting for 5 seconds - This is for testing...")
+	await delay(5000);
 	await checkOpenOrders();
 	switch (task) {
 	case "cancel":
@@ -1475,6 +1475,7 @@ async function checkOpenOrders() {
 
 	// Create an array to hold publicKey values
 	checkArray = openOrders.map((order) => order.publicKey.toString());
+	return checkArray;
 }
 
 async function cancelOrder(target = [], payer) {
