@@ -975,9 +975,9 @@ async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
 						outputMint: outputMint.toString(),
 						expiredAt: null,
 						base: base.publicKey.toString(),
-						referralAccount:
-							"7WGULgEo4Veqj6sCvA3VNxGgBf3EXJd8sW2XniBda3bJ",
-						referralName: "Jupiter GridBot"
+						//referralAccount:
+						//	"7WGULgEo4Veqj6sCvA3VNxGgBf3EXJd8sW2XniBda3bJ",
+						//referralName: "Jupiter GridBot"
 					})
 				}
 			);
