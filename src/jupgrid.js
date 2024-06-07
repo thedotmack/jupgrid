@@ -44,6 +44,7 @@ import logger from './logger.js';
 const packageInfo = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 let currentVersion = packageInfo.version;
+let configVersion = currentVersion;
 
 const [MIN_WAIT, MAX_WAIT] = [5e2, 5e3];
 
@@ -466,7 +467,7 @@ Token Decimals: ${token.decimals}`);
 	//rl.close(); // Close the readline interface after question loops are done.
 
 	saveuserSettings(
-		currentVersion,
+		configVersion,
 		selectedTokenA,
 		selectedAddressA,
 		selectedDecimalsA,
@@ -737,8 +738,8 @@ async function infinityGrid() {
     const targetValueUSDDown = balanceBLamports / Math.pow(10, selectedDecimalsB) * newPriceBDown;
     
     // Calculate the initial lamports to sell and buy
-    let lamportsToSellInitial = Math.floor((targetValueUSDUp - infinityTarget) / newPriceBUp * Math.pow(10, selectedDecimalsB));
-    let lamportsToBuyInitial = Math.floor((infinityTarget - targetValueUSDDown) / newPriceBDown * Math.pow(10, selectedDecimalsB));
+    let lamportsToSellInitial = Math.floor((targetValueUSDUp - infinityTarget) / newPriceBUp * Math.pow(10, selectedDecimalsB)/0.999);
+    let lamportsToBuyInitial = Math.floor((infinityTarget - targetValueUSDDown) / newPriceBDown * Math.pow(10, selectedDecimalsB)/0.999);
 
     // Adjust the lamports to buy based on the potential cancellation of the sell order
     let lamportsToBuy = lamportsToBuyInitial - lamportsToSellInitial;
@@ -1016,59 +1017,60 @@ function encodeTransactionToBase58(transaction) {
 }
 
 async function jitoTipCheck() {
-	const JitoTipWS = 'ws://bundles-api-rest.jito.wtf/api/v1/bundles/tip_stream';
-	const tipws = new Websocket(JitoTipWS);
-	let resolveMessagePromise;
-	let rejectMessagePromise;
+    const JitoTipWS = 'ws://bundles-api-rest.jito.wtf/api/v1/bundles/tip_stream';
+    const tipws = new Websocket(JitoTipWS);
+    let resolveMessagePromise;
+    let rejectMessagePromise;
   
-	// Create a promise that resolves with the first message received
-	const messagePromise = new Promise((resolve, reject) => {
-	  resolveMessagePromise = resolve;
-	  rejectMessagePromise = reject;
-	});
+    // Create a promise that resolves with the first message received
+    const messagePromise = new Promise((resolve, reject) => {
+      resolveMessagePromise = resolve;
+      rejectMessagePromise = reject;
+    });
   
-	// Open WebSocket connection
-	tipws.on('open', function open() {
-	});
+    // Open WebSocket connection
+    tipws.on('open', function open() {
+    });
   
-	// Handle messages
-	tipws.on('message', function incoming(data) {
-	  const str = data.toString(); // Convert Buffer to string
+    // Handle messages
+    tipws.on('message', function incoming(data) {
+      var enc = new TextDecoder("utf-8");
+      const str = enc.decode(data); // Convert Buffer to string
   
-	  try {
-		const json = JSON.parse(str); // Parse string to JSON
-		const percentile50th = json[0].landed_tips_50th_percentile; // Access the 50th percentile property
+      try {
+        const json = JSON.parse(str); // Parse string to JSON
+        const emaPercentile50th = json[0].ema_landed_tips_50th_percentile; // Access the 50th percentile property
+		console.log(`50th Percentile: ${emaPercentile50th}`);
+        if (emaPercentile50th !== null) {
+          resolveMessagePromise(emaPercentile50th);
+        } else {
+          rejectMessagePromise(new Error('50th percentile is null'));
+        }
+      } catch (err) {
+        rejectMessagePromise(err);
+      }
+    });
   
-		if (percentile50th !== null) {
-		  resolveMessagePromise(percentile50th);
-		} else {
-		  rejectMessagePromise(new Error('50th percentile is null'));
-		}
-	  } catch (err) {
-		rejectMessagePromise(err);
-	  }
-	});
+    // Handle errors
+    tipws.on('error', function error(err) {
+      console.error('WebSocket error:', err);
+      rejectMessagePromise(err);
+    });
   
-	// Handle errors
-	tipws.on('error', function error(err) {
-	  console.error('WebSocket error:', err);
-	  rejectMessagePromise(err);
-	});
+    try {
+      // Wait for the first message or a timeout
+      const emaPercentile50th = await Promise.race([
+        messagePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 21000))
+      ]);
   
-	try {
-	  // Wait for the first message or a timeout
-	  const percentile50th = await Promise.race([
-		messagePromise,
-		new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
-	  ]);
-  
-	  tipws.close(); // Close WebSocket connection
-	  return percentile50th;
-	} catch (err) {
-	  console.error(err);
-	  tipws.close(); // Close WebSocket connection
-	  return 0.00005; // Return a default of 0.00005 if the request fails
-	}
+      tipws.close(); // Close WebSocket connection
+      return emaPercentile50th;
+    } catch (err) {
+      console.error(err);
+      tipws.close(); // Close WebSocket connection
+      return 0.00005; // Return a default of 0.00005 if the request fails
+    }
 }
 
 async function jitoController(task) {
@@ -1256,156 +1258,155 @@ async function handleJitoBundle(task, ...transactions) {
 }
 
 async function sendJitoBundle(task, bundletoSend) {
-	const encodedBundle = bundletoSend.map(encodeTransactionToBase58);
+    const encodedBundle = bundletoSend.map(encodeTransactionToBase58);
 
-	const { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(
-		payer,
-		selectedAddressA,
-		selectedAddressB,
-		selectedTokenA,
-		selectedTokenB
-	);
-	await checkOpenOrders();
-	const preBundleOrders = checkArray;
-	// console.log(`PreJitoA: ${preJitoA}`);
-	// console.log(`PreJitoB: ${preJitoB}`);
+    const { balanceA: preJitoA, balanceB: preJitoB } = await getBalance(
+        payer,
+        selectedAddressA,
+        selectedAddressB,
+        selectedTokenA,
+        selectedTokenB
+    );
+    await checkOpenOrders();
+    const preBundleOrders = checkArray;
 
-	const data = {
-		jsonrpc: "2.0",
-		id: 1,
-		method: "sendBundle",
-		params: [encodedBundle]
-	};
+    const data = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "sendBundle",
+        params: [encodedBundle]
+    };
 
-	let response;
-	const maxRetries = 5;
-	for (let i = 0; i <= maxRetries; i++) {
-		try {
-			response = await fetch(JitoBlockEngine, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify(data)
-			});
+    let response;
+    const maxRetries = 5;
+    for (let i = 0; i <= maxRetries; i++) {
+        try {
+            response = await fetch(JitoBlockEngine, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
 
-			if (response.ok) break; // if response is ok, we break the loop
+            if (response.ok) break;
 
-			if (response.status === 429) {
-				const waitTime = Math.min(MIN_WAIT * Math.pow(2, i), MAX_WAIT);
-				const jitter = Math.random() * 0.3 * waitTime;
-				await new Promise((resolve) =>
-					setTimeout(resolve, waitTime + jitter)
-				);
-			} else {
-				throw new Error("Unexpected error");
-			}
-		} catch (error) {
-			if (i === maxRetries) {
-				console.error("Max retries exceeded");
-				program.exit(0);
-			}
-		}
-	}
-	const responseText = await response.text(); // Get the response body as text
-	const responseData = JSON.parse(responseText); // Parse the response body as JSON
+            if (response.status === 429) {
+                const waitTime = Math.min(MIN_WAIT * Math.pow(2, i), MAX_WAIT);
+                const jitter = Math.random() * 0.3 * waitTime;
+                await new Promise((resolve) =>
+                    setTimeout(resolve, waitTime + jitter)
+                );
+            } else {
+                throw new Error("Unexpected error");
+            }
+        } catch (error) {
+            if (i === maxRetries) {
+                console.error("Max retries exceeded");
+                program.exit(0);
+            }
+        }
+    }
+    const responseText = await response.text();
+    const responseData = JSON.parse(responseText);
 
-	const result = responseData.result;
-	const url = `https://explorer.jito.wtf/bundle/${result}`;
-	console.log(`\nResult ID: ${url}`);
-	// spinner.stop();
-	console.log("Checking for 30 seconds...");
-	let jitoChecks = 1;
-	const maxChecks = 30;
-	let spinner;
-	let bundleLanded = false;
-	while (jitoChecks <= maxChecks) {
-		spinner = ora(
-			`Checking Jito Bundle Status... ${jitoChecks}/${maxChecks}`
-		).start();
-		console.log("\nTask: ", task);
-		try {
-			const { balanceA: postJitoA, balanceB: postJitoB } = await getBalance(
-				payer,
-				selectedAddressA,
-				selectedAddressB,
-				selectedTokenA,
-				selectedTokenB
-			);
-			if (postJitoA !== preJitoA || postJitoB !== preJitoB) {
-				bundleLanded = true;
-				spinner.stop();
-				console.log(
-					"\nBundle Landed, waiting for orders to finalize..."
-				);
-				if (task !== "rebalance") {
-					let bundleChecks = 1;
-						while (bundleChecks <= 30) {
-						let postBundleOrders
-						await checkOpenOrders();
-						postBundleOrders = checkArray;
-						if (postBundleOrders !== preBundleOrders) {
-							console.log(
-								"\nBundle Landed, Orders Updated, Skipping Timer"
-							);
-							await delay(1000);
-							jitoChecks = 31;
-							break;
-						} else {
-							console.log(
-								`Checking Orders for ${bundleChecks} of 30 seconds`
-							);
-							await delay(1000);
-							bundleChecks++;
-						}
-					}
-				}
-				jitoChecks = 31;
-				break;
-			}
-			jitoChecks++;
-		} catch (error) {
-			console.error("Error in balance check:", error);
-		}
-		spinner.stop();
-	}
+    const result = responseData.result;
+    const url = `https://explorer.jito.wtf/bundle/${result}`;
+    console.log(`\nResult ID: ${url}`);
 
-	if (spinner) {
-		spinner.stop();
-	}
-	console.log("Waiting for 5 seconds - This is for testing...")
-	await delay(5000);
-	await checkOpenOrders();
-	switch (task) {
-	case "cancel":
-		if (checkArray.length > 0) {
-			console.log("Cancelling Orders Failed, Retrying...");
-			return "cancelFail";
-		} else {
-			console.log("Orders Cancelled Successfully");
-			return "succeed";
-		}
-	case "infinity":
-		if (checkArray.length !== 2) {
-			console.log("Placing Infinity Orders Failed, Retrying...");
-			return "infinityFail";
-		} else {
-			console.log("Infinity Orders Placed Successfully");
-			return "succeed";
-		}
-	case "rebalance":
-		// We dont need to check open orders here
-		if (bundleLanded) {
-			console.log("Rebalancing Tokens Successful");
-			return "succeed";
-		} else {
-			console.log("Rebalancing Tokens Failed, Retrying...");
-			return "rebalanceFail";
-		}
-	default:
-		console.log("Unknown state, retrying...");
-		return "unknown";
-	}
+    console.log("Checking for 30 seconds...");
+    let jitoChecks = 1;
+    const maxChecks = 30;
+    let spinner;
+    let bundleLanded = false;
+    while (jitoChecks <= maxChecks) {
+        spinner = ora(
+            `Checking Jito Bundle Status... ${jitoChecks}/${maxChecks}`
+        ).start();
+        console.log("\nTask: ", task);
+        try {
+            // Wait 1 second before each balance check to avoid error 429
+            await delay(1000); // Adding delay here
+            const { balanceA: postJitoA, balanceB: postJitoB } = await getBalance(
+                payer,
+                selectedAddressA,
+                selectedAddressB,
+                selectedTokenA,
+                selectedTokenB
+            );
+            if (postJitoA !== preJitoA || postJitoB !== preJitoB) {
+                bundleLanded = true;
+                spinner.stop();
+                console.log(
+                    "\nBundle Landed, waiting for orders to finalize..."
+                );
+                if (task !== "rebalance") {
+                    let bundleChecks = 1;
+                    while (bundleChecks <= 30) {
+                        let postBundleOrders;
+                        await checkOpenOrders();
+                        postBundleOrders = checkArray;
+                        if (postBundleOrders !== preBundleOrders) {
+                            console.log(
+                                "\nBundle Landed, Orders Updated, Skipping Timer"
+                            );
+                            await delay(1000);
+                            jitoChecks = 31;
+                            break;
+                        } else {
+                            console.log(
+                                `Checking Orders for ${bundleChecks} of 30 seconds`
+                            );
+                            await delay(1000);
+                            bundleChecks++;
+                        }
+                    }
+                }
+                jitoChecks = 31;
+                break;
+            }
+            jitoChecks++;
+        } catch (error) {
+            console.error("Error in balance check:", error);
+        }
+        spinner.stop();
+    }
+
+    if (spinner) {
+        spinner.stop();
+    }
+    console.log("Waiting for 5 seconds - This is for testing...")
+    await delay(5000);
+    await checkOpenOrders();
+    switch (task) {
+        case "cancel":
+            if (checkArray.length > 0) {
+                console.log("Cancelling Orders Failed, Retrying...");
+                return "cancelFail";
+            } else {
+                console.log("Orders Cancelled Successfully");
+                return "succeed";
+            }
+        case "infinity":
+            if (checkArray.length !== 2) {
+                console.log("Placing Infinity Orders Failed, Retrying...");
+                return "infinityFail";
+            } else {
+                console.log("Infinity Orders Placed Successfully");
+                return "succeed";
+            }
+        case "rebalance":
+            if (bundleLanded) {
+                console.log("Rebalancing Tokens Successful");
+                return "succeed";
+            } else {
+                console.log("Rebalancing Tokens Failed, Retrying...");
+                return "rebalanceFail";
+            }
+        default:
+            console.log("Unknown state, retrying...");
+            return "unknown";
+    }
 }
 
 async function rebalanceTokens(
