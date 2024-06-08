@@ -843,8 +843,8 @@ async function fetchNewUSDValues() {
 	);
   
 	return {
-	  currUSDBalanceA: tempUSDBalanceA ?? currUSDBalanceA,
-	  currUSDBalanceB: tempUSDBalanceB ?? currUSDBalanceB,
+	  newUSDBalanceA: tempUSDBalanceA ?? currUSDBalanceA,
+	  newUSDBalanceB: tempUSDBalanceB ?? currUSDBalanceB,
 	};
 }
 
@@ -902,9 +902,11 @@ async function updateMainDisplay() {
 	  `\u{1F527} Settings: ${chalk.cyan(selectedTokenA)}/${chalk.magenta(selectedTokenB)}\n\u{1F3AF} ${selectedTokenB} Target Value: $${infinityTarget}\n\u{1F6A8} Stop Loss at $${stopLossUSD}\n\u{2B65} Spread: ${spread}%\n\u{1F55A} Monitor Delay: ${monitorDelay}ms`
 	);
 	try {
-	  const { currUSDBalanceA, currUSDBalanceB } = await fetchNewUSDValues();
-	  currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
-	  newPrice = await updatePrice(selectedAddressB);
+	const { newUSDBalanceA, newUSDBalanceB } = await fetchNewUSDValues();
+	currUSDBalanceA = newUSDBalanceA;
+	currUSDBalanceB = newUSDBalanceB;
+	currUsdTotalBalance = currUSDBalanceA + currUSDBalanceB; // Recalculate total
+	newPrice = await updatePrice(selectedAddressB);
 	} catch (error) {
 	  // Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
@@ -1046,7 +1048,7 @@ async function jitoTipCheck() {
       try {
         const json = JSON.parse(str); // Parse string to JSON
         const emaPercentile50th = json[0].ema_landed_tips_50th_percentile; // Access the 50th percentile property
-		console.log(`50th Percentile: ${emaPercentile50th}`);
+		console.log(`50th Percentile: ${emaPercentile50th.toFixed(9)}`);
         if (emaPercentile50th !== null) {
           resolveMessagePromise(emaPercentile50th);
         } else {
