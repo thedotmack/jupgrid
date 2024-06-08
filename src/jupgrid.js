@@ -275,7 +275,7 @@ async function initialize() {
 		validSpread = true;
 	}
 	let validMonitorDelay = false;
-	if (monitorDelay >= 5000) {
+	if (monitorDelay >= 1000) {
 		validMonitorDelay = true;
 	}
 	let validStopLossUSD = false;
@@ -450,16 +450,22 @@ Token Decimals: ${token.decimals}`);
 
 	while (!validMonitorDelay) {
 		const monitorDelayQuestion = await questionAsync(
-			`Enter the delay between price checks in milliseconds (minimum 5000ms): `
+			`Enter the delay between price checks in milliseconds (minimum 1000ms, recommended/default > 5000ms): `
 		);
-		const parsedMonitorDelay = parseInt(monitorDelayQuestion.trim());
-		if (!isNaN(parsedMonitorDelay) && parsedMonitorDelay >= 5000) {
-			monitorDelay = parsedMonitorDelay;
+		// Check if input is empty and set default value
+		if (monitorDelayQuestion.trim() === '') {
+			monitorDelay = 5000;
 			validMonitorDelay = true;
 		} else {
-			console.log(
-				"Invalid monitor delay. Please enter a valid number greater than or equal to 5000."
-			);
+			const parsedMonitorDelay = parseInt(monitorDelayQuestion.trim());
+			if (!isNaN(parsedMonitorDelay) && parsedMonitorDelay >= 1000) {
+				monitorDelay = parsedMonitorDelay;
+				validMonitorDelay = true;
+			} else {
+				console.log(
+					"Invalid monitor delay. Please enter a valid number greater than or equal to 1000."
+				);
+			}
 		}
 	}
 
@@ -656,7 +662,7 @@ function formatElapsedTime(startTime) {
 
 async function monitor() {
 	if (shutDown) return;
-	const maxRetries = 5;
+	const maxRetries = 20;
 	let retries = 0;
 	await updateMainDisplay();
 	while (retries < maxRetries) {
@@ -924,8 +930,8 @@ Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
 Market Change USD: ${(newPrice - startPrice).toFixed(9)}
 Performance Delta: ${(percentageChange - ((newPrice - startPrice) / startPrice) * 100).toFixed(2)}%
 -
-Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))} (Change: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))})
-Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))} (Change: ${chalk.magenta((currBalanceB - initBalanceB).toFixed(5))})
+Latest Snapshot Balance ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(currBalanceA.toFixed(5))} (Change: ${chalk.cyan((currBalanceA - initBalanceA).toFixed(5))}) - Worth: $${currUSDBalanceA.toFixed(2)}
+Latest Snapshot Balance ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(currBalanceB.toFixed(5))} (Change: ${chalk.magenta((currBalanceB - initBalanceB).toFixed(5))}) - Worth: $${currUSDBalanceB.toFixed(2)}
 -
 Starting Balance A - ${chalk.cyan(selectedTokenA)}: ${chalk.cyan(initBalanceA.toFixed(5))}
 Starting Balance B - ${chalk.magenta(selectedTokenB)}: ${chalk.magenta(initBalanceB.toFixed(5))}
@@ -1482,6 +1488,7 @@ async function checkOpenOrders() {
 async function cancelOrder(target = [], payer) {
 	const retryCount = 10;
     for (let i = 0; i < retryCount; i++) {
+		target = await checkOpenOrders();
 		if (target.length === 0) {
 			console.log("No orders to cancel.");
 			return "skip";
