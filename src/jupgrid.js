@@ -1,24 +1,16 @@
 // #region imports
 import axios from 'axios';
-import bs58 from 'bs58';
 import chalk from 'chalk';
 import fetch from 'cross-fetch';
 import * as fs from 'fs';
-import ora from 'ora';
-import Websocket from 'ws';
 
 import {
 	LimitOrderProvider,
 	ownerFilter
 } from '@jup-ag/limit-order-sdk';
-import { program } from '@project-serum/anchor/dist/cjs/native/system.js';
 import * as solanaWeb3 from '@solana/web3.js';
 import {
 	Connection,
-	Keypair,
-	PublicKey,
-	SystemProgram,
-	TransactionMessage,
 	VersionedTransaction
 } from '@solana/web3.js';
 
@@ -37,24 +29,19 @@ import {
 } from './utils.js';
 import logger from './logger.js';
 import {
-    encodeTransactionToBase58,
-    jitoTipCheck,
     jitoController,
-    jitoCancelOrder,
-    jitoSetInfinity,
-    jitoRebalance,
-    handleJitoBundle,
-    sendJitoBundle
 } from './jito_utils.js';
 // #endregion
 
 // #region exports
 export {
+	initialize,
     checkOpenOrders,
     cancelOrder,
     createTx,
     balanceCheck,
     getBalance,
+	connection,
 	payer,
     selectedAddressA,
     selectedAddressB,
@@ -65,7 +52,6 @@ export {
     infinitySellInputLamports,
     infinitySellOutputLamports,
 	checkArray,
-
 };
 // #endregion
 
@@ -105,7 +91,6 @@ console.log = function(message) {
   // Also log message to the file
   logger.info(message);
 };
-
 // #endregion
 
 // #region properties
@@ -147,7 +132,6 @@ let {
 	adjustmentA = 0,
 	adjustmentB = 0,
 	stopLoss = false,
-	//jitoRetry = 0,
 	infinityBuyInputLamports,
 	infinityBuyOutputLamports,
 	infinitySellInputLamports,
@@ -1259,5 +1243,3 @@ process.on("SIGINT", () => {
 		process.exit(0);
 	})();
 });
-
-export { connection, initialize };
