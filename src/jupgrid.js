@@ -52,6 +52,7 @@ export {
     infinitySellInputLamports,
     infinitySellOutputLamports,
 	checkArray,
+	maxJitoTip
 };
 // #endregion
 
@@ -132,6 +133,7 @@ let {
 	adjustmentA = 0,
 	adjustmentB = 0,
 	stopLoss = false,
+	maxJitoTip = null,
 	infinityBuyInputLamports,
 	infinityBuyOutputLamports,
 	infinitySellInputLamports,
@@ -193,9 +195,10 @@ async function loadQuestion() {
 Version: ${userSettings.configVersion}
 Token A: ${chalk.cyan(userSettings.selectedTokenA)}
 Token B: ${chalk.magenta(userSettings.selectedTokenB)}
-Infinity Target: ${userSettings.infinityTarget}
+Token B Target Value: ${userSettings.infinityTarget}
 Spread: ${userSettings.spread}%
 Stop Loss: ${userSettings.stopLossUSD}
+Maximum Jito Tip: ${userSettings.maxJitoTip} SOL
 Monitoring delay: ${userSettings.monitorDelay}ms\n`
 								);
 								// Prompt for confirmation to use these settings
@@ -217,6 +220,7 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 												spread,
 												monitorDelay,
 												stopLossUSD,
+												maxJitoTip,
 												infinityTarget
 											} = userSettings);
 											console.log(
@@ -280,6 +284,10 @@ async function initialize() {
 	if (stopLossUSD != null) {
 		validStopLossUSD = true;
 	}
+	let validJitoMaxTip = false;
+	if (maxJitoTip != null) {
+		validJitoMaxTip = true;
+	}
 	let validInfinityTarget = false;
 	if (infinityTarget != null) {
 		validInfinityTarget = true;
@@ -301,10 +309,10 @@ async function initialize() {
   } else {
     validTokenA = true;
   }
-}
+	}
 
-while (!validTokenA) {
-	console.log("During this Beta stage, we are only allowing USDC as Token A. Is that ok?");
+	while (!validTokenA) {
+	console.log("\nDuring this Beta stage, we are only allowing USDC as Token A. Is that ok?");
 	// Simulate the user entered 'USDC' as their answer
 	let answer = 'USDC';
 
@@ -325,10 +333,10 @@ Token Decimals: ${token.decimals}`);
       selectedAddressA = token.address;
       selectedDecimalsA = token.decimals;
     }
-  } else {
+  } else { 
     console.log(`Token ${answer} not found. Please Try Again.`);
   }
-}
+	}
 
 	if (userSettings.selectedTokenB) {
 		const tokenBExists = tokens.some(
@@ -348,7 +356,7 @@ Token Decimals: ${token.decimals}`);
 
 	while (!validTokenB) {
 		const answer = await questionAsync(
-			`Please Enter The Second Token Symbol (B) (Case Sensitive): `
+			`\nPlease Enter The Second Token Symbol (B) (Case Sensitive): `
 		);
 		const token = tokens.find((t) => t.symbol === answer);
 		if (token) {
@@ -375,7 +383,7 @@ Token Decimals: ${token.decimals}`);
 	// If infinity target value is not valid, prompt the user
 	while (!validInfinityTarget) {
 		const infinityTargetInput = await questionAsync(
-			`Please Enter the Infinity Target Value: `
+			`\nPlease Enter the Token B Target Value (in USD): `
 		);
 		infinityTarget = Math.floor(parseFloat(infinityTargetInput));
 		if (
@@ -387,7 +395,7 @@ Token Decimals: ${token.decimals}`);
 			validInfinityTarget = true;
 		} else {
 			console.log(
-				"Invalid infinity target value. Please enter a valid integer that is larger than the stop loss value."
+				"Invalid Token B Target value. Please enter a valid integer that is larger than the stop loss value."
 			);
 		}
 	}
@@ -407,7 +415,8 @@ Token Decimals: ${token.decimals}`);
 	// If spread percentage is not valid, prompt the user
 	while (!validSpread) {
 		const spreadInput = await questionAsync(
-			"What % Spread Difference Between Market and Orders? Recommend >0.3% to cover Jupiter Fees, but 1% or greater for best performance:"
+			`\nWhat % Spread Difference Between Market and Orders?
+Recommend >0.3% to cover Jupiter Fees, but 1% or greater for best performance:`
 		);
 		spread = parseFloat(spreadInput);
 		if (!isNaN(spread)) {
@@ -433,7 +442,8 @@ Token Decimals: ${token.decimals}`);
 	// If stop loss value is not valid, prompt the user
 	while (!validStopLossUSD) {
 		const stopLossUSDInput = await questionAsync(
-			`Please Enter the Stop Loss Value in USD: (Enter 0 for no stoploss) `
+			`\nPlease Enter the Stop Loss Value in USD: 
+(Enter 0 for no stoploss) `
 		);
 		stopLossUSD = parseFloat(stopLossUSDInput);
 		if (!isNaN(stopLossUSD)) {
@@ -446,9 +456,35 @@ Token Decimals: ${token.decimals}`);
 		}
 	}
 
+	while (!validJitoMaxTip) {
+		const maxJitoTipQuestion = await questionAsync(
+			`\nEnter the maximum Jito tip in SOL
+This is the maximum tip you are willing to pay for a Jito order,
+However, we use a dynamic tip based on the last 30 minute average tip.
+(Default 0.0002 SOL, Minimum 0.00001): `
+		);
+		// Check if input is empty and set default value
+		if (maxJitoTipQuestion.trim() === '') {
+			maxJitoTip = 0.0002;
+			validJitoMaxTip = true;
+		} else {
+			const parsedMaxJitoTip = parseFloat(maxJitoTipQuestion.trim());
+			if (!isNaN(parsedMaxJitoTip) && parsedMaxJitoTip >= 0.00001) {
+				maxJitoTip = parsedMaxJitoTip;
+				validJitoMaxTip = true;
+			} else {
+				console.log(
+					"Invalid Jito tip. Please enter a valid number greater than or equal to 0.00001."
+				);
+			}
+		}
+	
+	}
+
 	while (!validMonitorDelay) {
 		const monitorDelayQuestion = await questionAsync(
-			`Enter the delay between price checks in milliseconds (minimum 1000ms, recommended/default > 5000ms): `
+			`\nEnter the delay between price checks in milliseconds.
+(minimum 1000ms, recommended/default > 5000ms): `
 		);
 		// Check if input is empty and set default value
 		if (monitorDelayQuestion.trim() === '') {
@@ -481,6 +517,7 @@ Token Decimals: ${token.decimals}`);
 		spread,
 		monitorDelay,
 		stopLossUSD,
+		maxJitoTip,
 		infinityTarget
 	);
 	// First Price check during init
@@ -1124,6 +1161,7 @@ async function cancelOrder(target = [], payer) {
             transaction.sign(payer);
             return transaction;
         } catch (error) {
+			await delay(2000);
             if (i === retryCount - 1) throw error; // If last retry, throw error
             console.log(`Attempt ${i + 1} failed. Retrying...`);
 
@@ -1152,7 +1190,7 @@ async function balanceCheck() {
   
 	if (currUsdTotalBalance < infinityTarget) {
 	  console.log(
-		`Your total balance is not high enough for your Infinity Target. Please either increase your wallet balance or reduce your target.`
+		`Your total balance is not high enough for your Token B Target Value. Please either increase your wallet balance or reduce your target.`
 	  );
 	  process.exit(0);
 	}

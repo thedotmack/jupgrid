@@ -26,7 +26,8 @@ import {
     infinityBuyOutputLamports,
     infinitySellInputLamports,
     infinitySellOutputLamports,
-    checkArray
+    checkArray,
+    maxJitoTip
 } from './jupgrid.js';
 
 import {delay} from './utils.js';
@@ -262,6 +263,9 @@ async function handleJitoBundle(task, ...transactions) {
   } catch (err) {
     console.error(err);
     tipValueInSol = 0.00005; // Replace 0 with your default value
+  }
+  if (tipValueInSol > maxJitoTip) {
+    tipValueInSol = maxJitoTip;
   }
   const tipValueInLamports = tipValueInSol * 1_000_000_000;
   const roundedTipValueInLamports = Math.round(tipValueInLamports);

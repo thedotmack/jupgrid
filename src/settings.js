@@ -101,6 +101,7 @@ function saveuserSettings(
 	spread,
 	monitorDelay,
 	stopLossUSD,
+	maxJitoTip,
 	infinityTarget
 ) {
 	try {
@@ -118,6 +119,7 @@ function saveuserSettings(
 					spread,
 					monitorDelay,
 					stopLossUSD,
+					maxJitoTip,
 					infinityTarget
 				},
 				null,
