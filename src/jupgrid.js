@@ -142,6 +142,7 @@ let {
 	askForRebalance = true,
 	rebalanceCounter = 0,
 	newPriceBUp = null,
+	newPriceBUp2 = null,
 	newPriceBDown = null,
 	lastKnownPrice = null,
 	userSettings = {
@@ -774,7 +775,8 @@ async function infinityGrid() {
 		process.kill(process.pid, "SIGINT");
 	}
     // Calculate the new prices of tokenB when it's up and down by the spread%
-    newPriceBUp = averageMarketPrice * (1 + spreadbps / 10000);
+    newPriceBUp = averageMarketPrice * (1 + (spreadbps * 1.3) / 10000);
+	newPriceBUp2 = averageMarketPrice * (1 + (spreadbps) / 10000);
     newPriceBDown = averageMarketPrice * (1 - spreadbps / 10000);
     
     // Calculate the current value of TokenB in USD
@@ -785,8 +787,8 @@ async function infinityGrid() {
     const targetValueUSDDown = balanceBLamports / Math.pow(10, selectedDecimalsB) * newPriceBDown;
     
     // Calculate the initial lamports to sell and buy
-    let lamportsToSellInitial = Math.floor((targetValueUSDUp - infinityTarget) / newPriceBUp * Math.pow(10, selectedDecimalsB)/0.999);
-    let lamportsToBuyInitial = Math.floor((infinityTarget - targetValueUSDDown) / newPriceBDown * Math.pow(10, selectedDecimalsB)/0.999);
+    let lamportsToSellInitial = Math.floor((targetValueUSDUp - infinityTarget) / newPriceBUp * Math.pow(10, selectedDecimalsB)/0.998);
+    let lamportsToBuyInitial = Math.floor((infinityTarget - targetValueUSDDown) / newPriceBDown * Math.pow(10, selectedDecimalsB)/0.998);
 
     // Adjust the lamports to buy based on the potential cancellation of the sell order
     let lamportsToBuy = lamportsToBuyInitial - lamportsToSellInitial;
