@@ -969,17 +969,17 @@ async function updateMainDisplay() {
 	
 	if(iteration === 0)
 	{
-			currentTracker = new Array(50).fill(newPrice * (10**9));
-			sellPrice = new Array(50).fill(newPriceBUp * (10**9));
-			buyPrice = new Array(50).fill(newPriceBDown * (10**9));
+			currentTracker = new Array(50).fill(newPrice * (10**selectedDecimalsB));
+			sellPrice = new Array(50).fill(newPriceBUp * (10**selectedDecimalsB));
+			buyPrice = new Array(50).fill(newPriceBDown * (10**selectedDecimalsB));
 	}
 	
 
-	currentTracker.splice(0,0,(newPrice * (10**9)).toString())
+	currentTracker.splice(0,0,(newPrice * (10**selectedDecimalsB)).toString())
 	currentTracker.pop();
-	buyPrice.splice(0,0,(newPriceBDown * (10**9)).toString())
+	buyPrice.splice(0,0,(newPriceBDown * (10**selectedDecimalsB)).toString())
 	buyPrice.pop();
-	sellPrice.splice(0,0,(newPriceBUp * (10**9)).toString())
+	sellPrice.splice(0,0,(newPriceBUp * (10**selectedDecimalsB)).toString())
 	sellPrice.pop();
 	iteration++;
 	var config = {
