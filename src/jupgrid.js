@@ -143,7 +143,6 @@ let {
 	askForRebalance = true,
 	rebalanceCounter = 0,
 	newPriceBUp = null,
-	newPriceBUp2 = null,
 	newPriceBDown = null,
 	lastKnownPrice = null,
 	currentTracker = null,
@@ -538,7 +537,7 @@ However, we use a dynamic tip based on the last 30 minute average tip.
 	startPrice = newPrice;
 
 	console.clear();
-	console.log(`Starting JupGrid v${currentVersion}
+	console.log(`Starting JupGrid v${packageInfo.version};
 Your Token Selection for A - Symbol: ${chalk.cyan(selectedTokenA)}, Address: ${chalk.cyan(selectedAddressA)}
 Your Token Selection for B - Symbol: ${chalk.magenta(selectedTokenB)}, Address: ${chalk.magenta(selectedAddressB)}`);
 	startInfinity();
@@ -781,7 +780,6 @@ async function infinityGrid() {
 	}
     // Calculate the new prices of tokenB when it's up and down by the spread%
     newPriceBUp = averageMarketPrice * (1 + (spreadbps * 1.3) / 10000);
-	newPriceBUp2 = averageMarketPrice * (1 + (spreadbps) / 10000);
     newPriceBDown = averageMarketPrice * (1 - spreadbps / 10000);
     
     // Calculate the current value of TokenB in USD
@@ -941,7 +939,7 @@ async function updatePrice() {
 
 async function updateMainDisplay() {
 	console.clear();
-	console.log(`Jupgrid v${currentVersion}`);
+	console.log(`Jupgrid v${packageInfo.version}`);
 	console.log(`\u{267E}  Infinity Mode`);
 	console.log(`\u{1F4B0} Wallet: ${displayAddress}`);
 	formatElapsedTime(startTime);
@@ -971,25 +969,25 @@ async function updateMainDisplay() {
 	
 	if(iteration === 0)
 	{
-			currentTracker = new Array(50).fill(newPrice * (10**selectedDecimalsB));
-			sellPrice = new Array(50).fill(newPriceBUp * (10**selectedDecimalsB));
-			buyPrice = new Array(50).fill(newPriceBDown * (10**selectedDecimalsB));
+			currentTracker = new Array(50).fill(newPrice);
+			sellPrice = new Array(50).fill(newPriceBUp);
+			buyPrice = new Array(50).fill(newPriceBDown);
 	}
 	
 
-	currentTracker.splice(0,0,(newPrice * (10**selectedDecimalsB)).toString())
+	currentTracker.splice(0,0,(newPrice).toString())
 	currentTracker.pop();
-	buyPrice.splice(0,0,(newPriceBDown * (10**selectedDecimalsB)).toString())
+	buyPrice.splice(0,0,(newPriceBDown).toString())
 	buyPrice.pop();
-	sellPrice.splice(0,0,(newPriceBUp * (10**selectedDecimalsB)).toString())
+	sellPrice.splice(0,0,(newPriceBUp).toString())
 	sellPrice.pop();
 	iteration++;
 	var config = {
-		height:14,
+		height:30,
 		colors:[
 			asciichart.blue,
 			asciichart.green,
-			asciichart.yellow
+			asciichart.yellow,
 		]
 	}
 	console.log(`-
