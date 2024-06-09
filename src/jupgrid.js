@@ -31,6 +31,7 @@ import logger from './logger.js';
 import {
     jitoController,
 } from './jito_utils.js';
+import asciichart from 'asciichart'
 // #endregion
 
 // #region exports
@@ -145,6 +146,10 @@ let {
 	newPriceBUp2 = null,
 	newPriceBDown = null,
 	lastKnownPrice = null,
+	currentTracker = null,
+	sellPrice = null,
+	buyPrice = null,
+	iteration = 0,
 	userSettings = {
 		selectedTokenA: null,
 		selectedTokenB: null,
@@ -963,7 +968,30 @@ async function updateMainDisplay() {
 	  stopLoss = true;
 	  process.kill(process.pid, "SIGINT");
 	}
-  
+	
+	if(iteration === 0)
+	{
+			currentTracker = new Array(50).fill(newPrice * (10**selectedDecimalsB));
+			sellPrice = new Array(50).fill(newPriceBUp * (10**selectedDecimalsB));
+			buyPrice = new Array(50).fill(newPriceBDown * (10**selectedDecimalsB));
+	}
+	
+
+	currentTracker.splice(0,0,(newPrice * (10**selectedDecimalsB)).toString())
+	currentTracker.pop();
+	buyPrice.splice(0,0,(newPriceBDown * (10**selectedDecimalsB)).toString())
+	buyPrice.pop();
+	sellPrice.splice(0,0,(newPriceBUp * (10**selectedDecimalsB)).toString())
+	sellPrice.pop();
+	iteration++;
+	var config = {
+		height:14,
+		colors:[
+			asciichart.blue,
+			asciichart.green,
+			asciichart.yellow
+		]
+	}
 	console.log(`-
 Starting Balance : $${initUsdTotalBalance.toFixed(2)}
 Current Balance  : $${currUsdTotalBalance.toFixed(2)}`);
@@ -985,8 +1013,9 @@ Trades: ${counter}
 Rebalances: ${rebalanceCounter}
 -
 Sell Order Price: ${newPriceBUp.toFixed(9)} - Selling ${chalk.magenta(Math.abs(infinitySellInputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinitySellOutputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}
-Current Price: ${newPrice.toFixed(9)}
-Buy Order Price: ${newPriceBDown.toFixed(9)} - Buying ${chalk.magenta(Math.abs(infinityBuyOutputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinityBuyInputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}\n`);
+Current Price: `);
+console.log(asciichart.plot([currentTracker,buyPrice,sellPrice],config));
+console.log(`Buy Order Price: ${newPriceBDown.toFixed(9)} - Buying ${chalk.magenta(Math.abs(infinityBuyOutputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinityBuyInputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}\n`);
 }
 
 async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
@@ -999,19 +1028,6 @@ async function createTx(inAmount, outAmount, inputMint, outputMint, base) {
 	while (attempt < maxRetries) {
 		attempt++;
 		try {
-			const tokenAccounts = await getTokenAccounts(
-				connection,
-				payer.publicKey,
-				new solanaWeb3.PublicKey(
-					"9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh"
-				)
-			);
-			if (tokenAccounts.value.length === 0) {
-				console.log(
-					"No ARB token accounts found. Please purchase at least 25k ARB and try again."
-				);
-				process.exit(0);
-			}
 
 			const response = await fetch(
 				"https://jup.ag/api/limit/v1/createOrder",
