@@ -267,33 +267,39 @@ Monitoring delay: ${userSettings.monitorDelay}ms\n`
 }
 
 async function initialize() {
+	tokens = await getTokens();
+	
 	if (selectedTokenA != null) {
 		validTokenA = true;
 	}
+
 	if (selectedTokenB != null) {
 		validTokenB = true;
 	}
+
 	if (spread != null) {
 		validSpread = true;
 	}
+
 	let validMonitorDelay = false;
 	if (monitorDelay >= 1000) {
 		validMonitorDelay = true;
 	}
+
 	let validStopLossUSD = false;
 	if (stopLossUSD != null) {
 		validStopLossUSD = true;
 	}
+
 	let validJitoMaxTip = false;
 	if (maxJitoTip != null) {
 		validJitoMaxTip = true;
 	}
+
 	let validInfinityTarget = false;
 	if (infinityTarget != null) {
 		validInfinityTarget = true;
 	}
-
-	tokens = await getTokens();
 
 	if (userSettings.selectedTokenA) {
   	const tokenAExists = tokens.some(
