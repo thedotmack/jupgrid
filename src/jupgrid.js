@@ -937,6 +937,44 @@ async function updatePrice() {
     }
 }
 
+async function formatTokenPrice(price) {
+    let multiplier = 1;
+    let quantity = "";
+
+    if (price >= 1) {
+        // For prices above $1, no adjustment needed
+        return { multiplier, quantity };
+    } else {
+        // Adjust for prices below $1
+        if (price <= 0.00000001) {
+            multiplier = 100000000;
+            quantity = "per 100,000,000";
+        } else if (price <= 0.0000001) {
+            multiplier = 10000000;
+            quantity = "per 10,000,000";
+        } else if (price <= 0.000001) {
+            multiplier = 1000000;
+            quantity = "per 1,000,000";
+        } else if (price <= 0.00001) {
+            multiplier = 100000;
+            quantity = "per 100,000";
+        } else if (price <= 0.0001) {
+            multiplier = 10000;
+            quantity = "per 10,000";
+        } else if (price <= 0.001) {
+            multiplier = 1000;
+            quantity = "per 1,000";
+        } else if (price <= 0.99) {
+            multiplier = 100;
+            quantity = "per 100";
+        } else if (price >= 1) {
+            multiplier = 1; // No change needed, but included for clarity
+            quantity = ""; // No additional quantity description needed
+        }
+        return { multiplier, quantity };
+    }
+}
+
 async function updateMainDisplay() {
 	console.clear();
 	console.log(`Jupgrid v${packageInfo.version}`);
@@ -956,7 +994,7 @@ async function updateMainDisplay() {
 	} catch (error) {
 	  // Error is not critical. Reuse the previous balances and try another update again next cycle.
 	}
-  
+
 	if (currUsdTotalBalance < stopLossUSD) {
 	  // Emergency Stop Loss
 	  console.clear();
@@ -966,24 +1004,27 @@ async function updateMainDisplay() {
 	  stopLoss = true;
 	  process.kill(process.pid, "SIGINT");
 	}
-	
+
+	let {multiplier, quantity} = await formatTokenPrice(newPrice);
+	let adjustedNewPrice = newPrice * multiplier
+	let adjustedNewPriceBUp = newPriceBUp * multiplier
+	let adjustedNewPriceBDown = newPriceBDown * multiplier
 	if(iteration === 0)
 	{
-			currentTracker = new Array(50).fill(newPrice);
-			sellPrice = new Array(50).fill(newPriceBUp);
-			buyPrice = new Array(50).fill(newPriceBDown);
+			currentTracker = new Array(50).fill(adjustedNewPrice);
+			sellPrice = new Array(50).fill(adjustedNewPriceBUp);
+			buyPrice = new Array(50).fill(adjustedNewPriceBDown);
 	}
-	
 
-	currentTracker.splice(0,0,(newPrice).toString())
+	currentTracker.splice(0,0,(adjustedNewPrice).toString())
 	currentTracker.pop();
-	buyPrice.splice(0,0,(newPriceBDown).toString())
+	buyPrice.splice(0,0,(adjustedNewPriceBDown).toString())
 	buyPrice.pop();
-	sellPrice.splice(0,0,(newPriceBUp).toString())
+	sellPrice.splice(0,0,(adjustedNewPriceBUp).toString())
 	sellPrice.pop();
 	iteration++;
 	var config = {
-		height:30,
+		height:20,
 		colors:[
 			asciichart.blue,
 			asciichart.green,
@@ -1011,7 +1052,7 @@ Trades: ${counter}
 Rebalances: ${rebalanceCounter}
 -
 Sell Order Price: ${newPriceBUp.toFixed(9)} - Selling ${chalk.magenta(Math.abs(infinitySellInputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinitySellOutputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}
-Current Price: `);
+Current Price ${quantity}:`);
 console.log(asciichart.plot([currentTracker,buyPrice,sellPrice],config));
 console.log(`Buy Order Price: ${newPriceBDown.toFixed(9)} - Buying ${chalk.magenta(Math.abs(infinityBuyOutputLamports / Math.pow(10, selectedDecimalsB)))} ${chalk.magenta(selectedTokenB)} for ${chalk.cyan(Math.abs(infinityBuyInputLamports / Math.pow(10, selectedDecimalsA)))} ${chalk.cyan(selectedTokenA)}\n`);
 }
