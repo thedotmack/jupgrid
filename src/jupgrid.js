@@ -495,7 +495,7 @@ However, we use a dynamic tip based on the last 30 minute average tip.
 	while (!validMonitorDelay) {
 		const monitorDelayQuestion = await questionAsync(
 			`\nEnter the delay between price checks in milliseconds.
-(minimum 1000ms, recommended/default > 5000ms): `
+(minimum 100ms, recommended/default > 5000ms): `
 		);
 		// Check if input is empty and set default value
 		if (monitorDelayQuestion.trim() === '') {
@@ -503,7 +503,7 @@ However, we use a dynamic tip based on the last 30 minute average tip.
 			validMonitorDelay = true;
 		} else {
 			const parsedMonitorDelay = parseInt(monitorDelayQuestion.trim());
-			if (!isNaN(parsedMonitorDelay) && parsedMonitorDelay >= 1000) {
+			if (!isNaN(parsedMonitorDelay) && parsedMonitorDelay >= 100) {
 				monitorDelay = parsedMonitorDelay;
 				validMonitorDelay = true;
 			} else {
@@ -1298,6 +1298,13 @@ async function balanceCheck() {
 	  };
   
 	if (adjustmentA > 0) {
+		if (adjustmentA > currBalanceA) {
+			console.log(
+				`You do not have enough ${selectedTokenA} to rebalance. There has been an error.
+${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to ${chalk.magenta(selectedTokenB)}`
+			);
+			process.exit(0);
+		}
 	  console.log(
 		`Need to trade ${chalk.cyan(adjustmentA / Math.pow(10, selectedDecimalsA))} ${chalk.cyan(selectedTokenA)} to ${chalk.magenta(selectedTokenB)} to balance.`
 	  );
@@ -1316,6 +1323,13 @@ async function balanceCheck() {
 		return;
 	  }
 	} else if (adjustmentB > 0) {
+		if (adjustmentB > currBalanceB) {
+			console.log(
+				`You do not have enough ${selectedTokenB} to rebalance. There has been an error.
+Attempting to swap ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to ${chalk.cyan(selectedTokenA)}`
+			);
+			process.exit(0);
+		}
 	  console.log(
 		`Need to trade ${chalk.magenta(adjustmentB / Math.pow(10, selectedDecimalsB))} ${chalk.magenta(selectedTokenB)} to ${chalk.cyan(selectedTokenA)} to balance.`
 	  );
