@@ -2,9 +2,7 @@ import bs58 from 'bs58';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import promptSync from 'prompt-sync';
-
 import { Keypair } from '@solana/web3.js';
-
 import { initialize } from './jupgrid.js';
 import * as utils from './utils.js';
 
@@ -38,56 +36,51 @@ function envload() {
 		);
 		process.exit(1);
 	}
-	while (1) {
-		if (process.env.FLAG) {
-			try {
-				const password = prompt.hide(
-					"\u{1F512} Enter your password to decrypt your private key (input hidden): "
-				);
-				const cryptr = new utils.Encrypter(password);
-				const decdflag = cryptr.decrypt(process.env.FLAG);
-				if (decdflag !== encflag) {
-					console.error(
-						"\u{274C} Invalid password. Please ensure you are using the correct password."
-					);
-					continue;
-				}
+  while (1) {
+    if (process.env.FLAG) {
+      try {
+        const password = prompt.hide(
+          "\u{1F512} Enter your password to decrypt your private key (input hidden): "
+        );
+        const cryptr = new utils.Encrypter(password);
+        const decdflag = cryptr.decrypt(process.env.FLAG);
+        if (decdflag !== encflag) {
+          console.error(
+            "\u{274C} Invalid password. Please ensure you are using the correct password."
+          );
+          continue;
+        }
 
-				return [
-					Keypair.fromSecretKey(
-						new Uint8Array(
-							bs58.decode(
-								cryptr.decrypt(process.env.PRIVATE_KEY)
-							)
-						)
-					),
-					process.env.RPC_URL
-				];
-			} catch (error) {
-				console.error(
-					"\u{274C} Invalid password. Please ensure you are using the correct password."
-				);
-				console.error("\u{274C} An error occurred:", error);
-				continue;
-			}
-		} else {
-			const pswd = prompt.hide(
-				"\u{1F50F} Enter a password to encrypt your private key with (input hidden): "
-			);
-			const cryptr = new utils.Encrypter(pswd);
-			const encryptedKey = cryptr.encrypt(process.env.PRIVATE_KEY, pswd);
-			const encryptedFlag = cryptr.encrypt(encflag, pswd);
-			fs.writeFileSync(
-				envFilePath,
-				`RPC_URL=${process.env.RPC_URL}\n//Do NOT touch these two - you risk breaking encryption!\nPRIVATE_KEY=${encryptedKey}\nFLAG=${encryptedFlag}`,
-				"utf8"
-			);
-			console.log(
-				"\u{1F512} Encrypted private key and flag saved to .env file. Please restart JupGrid to continue."
-			);
-			process.exit(0);
-		}
-	} // end while
+        const decryptedPrivateKey = cryptr.decrypt(process.env.PRIVATE_KEY);
+        return [
+          Keypair.fromSecretKey(bs58.decode(decryptedPrivateKey)),
+          process.env.RPC_URL
+        ];
+      } catch (error) {
+        console.error(
+          "\u{274C} Invalid password or decryption error. Please ensure you are using the correct password."
+        );
+        console.error("\u{274C} An error occurred:", error);
+        continue;
+      }
+    } else {
+      const pswd = prompt.hide(
+        "\u{1F50F} Enter a password to encrypt your private key with (input hidden): "
+      );
+      const cryptr = new utils.Encrypter(pswd);
+      const encryptedKey = cryptr.encrypt(process.env.PRIVATE_KEY);
+      const encryptedFlag = cryptr.encrypt(encflag);
+      fs.writeFileSync(
+        envFilePath,
+        `RPC_URL=${process.env.RPC_URL}\n//Do NOT touch these two - you risk breaking encryption!\nPRIVATE_KEY=${encryptedKey}\nFLAG=${encryptedFlag}`,
+        "utf8"
+      );
+      console.log(
+        "\u{1F512} Encrypted private key and flag saved to .env file. Please restart JupGrid to continue."
+      );
+      process.exit(0);
+    }
+  } // end while
 }
 
 function saveuserSettings(
